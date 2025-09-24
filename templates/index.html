@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Консоль DHCP-сервера</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='bootstrap-icons.css') }}" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5;
+            background-image: url('{{ url_for('static', filename='background.jpg') }}');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-attachment: fixed;
+            opacity: 0.9;
+        }
+        [data-bs-theme="dark"] body {
+            background-color: #1a1a1a;
+            background-image: url('{{ url_for('static', filename='background.jpg') }}');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-attachment: fixed;
+            opacity: 0.9;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-left: auto;
+            margin-right: auto;
+        }
+        [data-bs-theme="dark"] .container {
+            background-color: rgba(26, 26, 26, 0.95);
+            color: #e0e0e0;
+        }
+        .table {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+        }
+        [data-bs-theme="dark"] .table {
+            background-color: rgba(37, 37, 37, 0.95) !important;
+            color: #e0e0e0;
+        }
+        .table td, .table th {
+            background-color: transparent !important;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+        }
+        [data-bs-theme="dark"] .table td, [data-bs-theme="dark"] .table th {
+            text-shadow: 0 1px 1px rgba(255, 255, 255, 0.2);
+        }
+        .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: rgba(245, 245, 245, 0.95) !important;
+        }
+        [data-bs-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: rgba(37, 37, 37, 0.95) !important;
+        }
+        .modal-content {
+            background-color: rgba(255, 255, 255, 0.95);
+        }
+        [data-bs-theme="dark"] .modal-content {
+            background-color: rgba(26, 26, 26, 0.95);
+            color: #e0e0e0;
+        }
+        .alert {
+            background-color: rgba(255, 255, 255, 0.95);
+        }
+        [data-bs-theme="dark"] .alert {
+            background-color: rgba(26, 26, 26, 0.95);
+            color: #e0e0e0;
+        }
+        .stats-table {
+            font-size: 0.9rem;
+            width: 100%;
+            table-layout: auto !important;
+            margin-bottom: 0;
+        }
+        .stats-table th, .stats-table td {
+            vertical-align: middle;
+            padding: 0.5rem;
+            box-sizing: border-box;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stats-table th:first-child, .stats-table td:first-child {
+            width: 5%;
+        }
+        .stats-table th:nth-child(2), .stats-table td:nth-child(2) {
+            width: 25%;
+        }
+        .stats-table th:nth-child(3), .stats-table td:nth-child(3) {
+            width: 15%;
+        }
+        .stats-table th:nth-child(4), .stats-table td:nth-child(4) {
+            width: 15%;
+        }
+        .stats-table th:nth-child(5), .stats-table td:nth-child(5) {
+            width: 15%;
+        }
+        .stats-table th:nth-child(6), .stats-table td:nth-child(6) {
+            width: 15%;
+        }
+        .stats-table th:nth-child(7), .stats-table td:nth-child(7) {
+            width: 15%;
+        }
+        .details-row td {
+            padding: 0.3rem;
+            background-color: rgba(230, 230, 230, 0.95);
+            font-size: 0.85rem;
+        }
+        [data-bs-theme="dark"] .details-row td {
+            background-color: rgba(50, 50, 50, 0.95);
+            color: #e0e0e0;
+        }
+        .status-active {
+            color: #28a745 !important;
+            font-weight: bold;
+        }
+        .status-expired {
+            color: #dc3545 !important;
+            font-weight: bold;
+        }
+        .status-blocked {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .status-allowed {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .lease-static {
+            font-weight: bold;
+        }
+        .lease-dynamic {
+            font-weight: bold;
+        }
+        [data-bs-theme="dark"] .form-control,
+        [data-bs-theme="dark"] .form-select {
+            background-color: rgba(51, 51, 51, 0.95);
+            color: #e0e0e0;
+            border-color: #555555;
+        }
+        [data-bs-theme="dark"] a,
+        [data-bs-theme="dark"] .btn-outline-primary {
+            color: #66b3ff;
+        }
+        [data-bs-theme="dark"] a:hover,
+        [data-bs-theme="dark"] .btn-outline-primary:hover {
+            color: #99ccff;
+        }
+        #logsModal .modal-content,
+        [data-bs-theme="dark"] #logsModal .modal-content {
+            background-color: rgba(37, 37, 37, 0.95);
+            color: #e0e0e0;
+        }
+        #logs-content {
+            max-height: 500px;
+            min-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            display: block !important;
+            visibility: visible !important;
+            background-color: rgba(255, 255, 255, 0.95);
+        }
+        [data-bs-theme="dark"] #logs-content {
+            background-color: rgba(37, 37, 37, 0.95);
+        }
+        .toggle-details {
+            border: none;
+            background: none;
+            padding: 0;
+            cursor: pointer;
+        }
+        .bi-chevron-right::before {
+            transition: transform 0.2s;
+        }
+        .bi-chevron-down::before {
+            transform: rotate(90deg);
+        }
+        .editable-cell {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .edit-icon {
+            width: 14px;
+            height: 14px;
+            vertical-align: middle;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .editable-cell:hover .edit-icon {
+            opacity: 1;
+        }
+        [data-bs-theme="light"] .edit-icon {
+            content: url('{{ url_for("static", filename="edit-light.svg") }}');
+        }
+        [data-bs-theme="dark"] .edit-icon {
+            content: url('{{ url_for("static", filename="edit-dark.svg") }}');
+        }
+        .edit-field {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .edit-field input {
+            width: 120px;
+            padding: 2px 5px;
+            font-size: 0.85rem;
+            line-height: 1.2;
+            height: 24px;
+        }
+        .edit-field button {
+            padding: 2px 5px;
+            font-size: 0.85rem;
+        }
+        .history-table {
+            font-size: 0.85rem;
+            margin-bottom: 0;
+            width: 100%;
+            table-layout: auto !important;
+        }
+        .history-table th, .history-table td {
+            padding: 0.3rem;
+            vertical-align: middle;
+            box-sizing: border-box;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-table th:nth-child(1), .history-table td:nth-child(1) {
+            width: 15%;
+        }
+        .history-table th:nth-child(2), .history-table td:nth-child(2) {
+            width: 15%;
+        }
+        .history-table th:nth-child(3), .history-table td:nth-child(3) {
+            width: 70%;
+        }
+        .add-static-form textarea {
+            min-height: 100px;
+        }
+        .stats-table-container {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-left: 15px;
+            margin-right: 15px;
+            max-width: calc(100% - 30px);
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+        [data-bs-theme="dark"] .stats-table-container {
+            background-color: rgba(26, 26, 26, 0.95);
+            color: #e0e0e0;
+        }
+        .stats-table-compact {
+            font-size: 0.9rem;
+            width: 100%;
+            margin-bottom: 0;
+        }
+        .stats-table-compact th, .stats-table-compact td {
+            padding: 0.5rem;
+            vertical-align: middle;
+            text-align: center !important;
+        }
+        .stats-table-compact th {
+            font-weight: normal;
+        }
+        .stats-table-compact td {
+            font-weight: bold;
+        }
+        .stats-table-compact th:nth-child(1), .stats-table-compact td:nth-child(1) {
+            width: 20%;
+        }
+        .stats-table-compact th:nth-child(2), .stats-table-compact td:nth-child(2) {
+            width: 20%;
+        }
+        .stats-table-compact th:nth-child(3), .stats-table-compact td:nth-child(3) {
+            width: 20%;
+        }
+        .stats-table-compact th:nth-child(4), .stats-table-compact td:nth-child(4) {
+            width: 20%;
+        }
+        .stats-table-compact th:nth-child(5), .stats-table-compact td:nth-child(5) {
+            width: 20%;
+        }
+        .sort-link {
+            color: inherit;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .sort-link:hover {
+            color: #007bff;
+        }
+        [data-bs-theme="dark"] .sort-link:hover {
+            color: #99ccff;
+        }
+        .sort-icon {
+            font-size: 0.8rem;
+            opacity: 0.5;
+        }
+        .sort-icon.active {
+            opacity: 1;
+        }
+		
+		.custom-hostname::before {
+            color: #0096ff;
+            margin-right: 5px;
+            font-weight: bold;
+        }
+		.custom-hostname {
+			color: #007bff !important;
+			font-weight: 500 !important;
+		}
+		
+        .th-resize-handle {
+            position: absolute;
+            top: 0;
+            right: -5px;
+            width: 10px;
+            height: 100%;
+            background-color: transparent;
+            cursor: col-resize;
+            user-select: none;
+            z-index: 1000;
+        }
+        .th-resize-handle:hover,
+        .th-resize-handle.active {
+            background-color: rgba(0, 123, 255, 0.5);
+        }
+        .stats-table th {
+            position: relative;
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        
+        .pagination .page-item.disabled .page-link {
+            color: #6c757d;
+            pointer-events: none;
+            cursor: auto;
+            background-color: rgba(0, 0, 0, 0.03);
+        }
+        [data-bs-theme="dark"] .pagination .page-item.disabled .page-link {
+            color: #6c757d;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .pagination .page-link {
+            min-width: 36px;
+            text-align: center;
+            padding: 0.375rem 0.75rem;
+        }
+		/* Стили для доверенных устройств - только текст и иконка */
+		.trusted-device {
+			color: #28a745 !important;
+			font-weight: 500 !important;
+		}
+
+		.trusted-device:hover {
+			color: #1e7e34 !important;
+		}
+
+		[data-bs-theme="dark"] .trusted-device {
+			color: #28a745 !important;
+		}
+
+		[data-bs-theme="dark"] .trusted-device:hover {
+			color: #4caf50 !important;
+		}
+		
+		.trusted-device .bi-shield-check {
+			font-size: 0.8em !important;
+			vertical-align: middle;
+		}
+
+		.custom-hostname.trusted-device {
+			color: #28a745 !important;
+			font-weight: 600 !important;
+		}
+		
+		.custom-hostname.trusted-device::before {
+			color: #0096ff;
+			margin-right: 5px;
+			font-weight: bold;
+			z-index: 1;
+		}
+		
+		.history-section {
+			margin-top: 20px;
+			margin-bottom: 20px;
+		}
+		.table-wrapper {
+			margin-top: 20px;
+		}
+		
+        @media (max-width: 767px) {
+            body {
+                font-size: 1rem;
+            }
+            .container {
+                margin-left: 15px;
+                margin-right: 15px;
+                padding: 15px;
+                max-width: calc(100% - 30px);
+            }
+            .stats-table-container {
+                margin-left: 15px;
+                margin-right: 15px;
+                padding: 10px;
+                max-width: calc(100% - 30px);
+                display: flex;
+                flex-grow: 1;
+                width: 100%;
+            }
+            h select {
+                font-size: 1.5rem;
+            }
+            .btn {
+                font-size: 0.85rem;
+                padding: 0.4rem 0.8rem;
+                min-width: 80px;
+                box-sizing: border-box;
+            }
+            .form-control,
+            .form-select {
+                font-size: 0.9rem;
+            }
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .stats-table {
+                font-size: 0.8rem;
+                min-width: 800px;
+            }
+            .stats-table th, .stats-table td {
+                padding: 0.4rem;
+            }
+            .details-row td {
+                padding: 0.2rem;
+                font-size: 0.8rem;
+            }
+            .modal-dialog {
+                margin: 0.5rem;
+            }
+            .row.g-3 > .col-md-2 {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+            .per-page-container {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            .pagination {
+                margin-bottom: 0.5rem;
+            }
+            .edit-field input {
+                width: 100px;
+                font-size: 0.8rem;
+                height: 22px;
+            }
+            .edit-field button {
+                padding: 1px 4px;
+            }
+            .history-table {
+                font-size: 0.75rem;
+            }
+            .edit-icon {
+                width: 12px;
+                height: 12px;
+            }
+            .stats-table-compact {
+                font-size: 0.8rem;
+                width: 100%;
+                min-width: 100%;
+                table-layout: auto;
+                display: block;
+                margin: 0;
+                padding: 0;
+            }
+            .stats-table-compact thead {
+                display: none;
+            }
+            .stats-table-compact tbody,
+            .stats-table-compact tr {
+                display: block;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            .stats-table-compact td {
+                display: block;
+                width: 100%;
+                min-width: 100%;
+                padding: 0.5rem;
+                box-sizing: border-box;
+                border-bottom: 1px solid #dee2e6;
+                text-align: left;
+                margin: 0;
+            }
+            .stats-table-compact td::before {
+                content: attr(data-label);
+                font-weight: bold;
+                display: block;
+                width: 100%;
+                min-width: 100%;
+                margin-bottom: 0.25rem;
+                box-sizing: border-box;
+            }
+            [data-bs-theme="dark"] .stats-table-compact td {
+                border-bottom: 1px solid #444;
+            }
+            .stats-table-compact td:last-child {
+                border-bottom: none;
+            }
+            .th-resize-handle {
+                display: none;
+            }
+            .d-flex.gap-2 {
+                flex-wrap: wrap;
+                gap: 0.1rem !important;
+                justify-content: space-between;
+            }
+            .d-flex.gap-2 .btn {
+                width: 145px;
+                min-width: 120px;
+                margin-right: 0.25rem;
+                text-align: center;
+                font-size: 0.8rem;
+                padding: 0.3rem 0.6rem;
+                box-sizing: border-box;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .pagination .page-link {
+                min-width: 32px;
+                padding: 0.25rem 0.5rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container my-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+            <h1>Консоль DHCP-сервера</h1>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('history') }}" class="btn btn-outline-primary mt-2 mt-md-0">История изменений</a>
+                <button type="button" class="btn btn-outline-secondary mt-2 mt-md-0" data-bs-toggle="modal" data-bs-target="#logsModal">
+                    Показать логи
+                </button>
+                <button id="theme-toggle" class="btn btn-outline-secondary mt-2 mt-md-0">
+                    Тёмная тема
+                </button>
+                <form method="POST" action="{{ url_for('logout') }}" class="d-inline">
+                    <button type="submit" class="btn btn-outline-secondary mt-2 mt-md-0">Выйти</button>
+                </form>
+            </div>
+        </div>
+        <div class="stats-table-container">
+            <h5>Статистика</h5>
+            <table class="table stats-table-compact">
+                <thead>
+                    <tr>
+                        <th>Занято адресов</th>
+                        <th>Свободно адресов</th>
+                        <th>Статические привязки</th>
+                        <th>Динамические привязки</th>
+                        <th>Заблокировано</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td data-label="Занято адресов">{{ stats.occupied }}</td>
+                        <td data-label="Свободно адресов">{{ stats.free }}</td>
+                        <td data-label="Статические привязки">{{ stats.static }}</td>
+                        <td data-label="Динамические привязки">{{ stats.dynamic }}</td>
+                        <td data-label="Заблокировано">{{ stats.blocked }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3 class="mb-2">Список клиентов:</h3>
+        <form method="GET" class="mb-3" id="filter-form">
+            <div class="row g-3">
+                <div class="col-md-2 col-12">
+                    <label for="mac" class="form-label">MAC-адрес</label>
+                    <input type="text" name="mac" id="mac" class="form-control" value="{{ mac_filter }}" placeholder="aa:bb:cc:dd:ee:ff">
+                </div>
+                <div class="col-md-2 col-12">
+                    <label for="ip" class="form-label">IP-адрес</label>
+                    <input type="text" name="ip" id="ip" class="form-control" value="{{ ip_filter }}" placeholder="192.168.1.x">
+                </div>
+                <div class="col-md-2 col-12">
+                    <label for="hostname" class="form-label">Имя хоста</label>
+                    <input type="text" name="hostname" id="hostname" class="form-control" value="{{ hostname_filter }}" placeholder="Имя хоста">
+                </div>
+                <div class="col-md-2 col-12">
+                    <label for="lease_type" class="form-label">Тип аренды</label>
+                    <select name="lease_type" id="lease_type" class="form-select" onchange="this.form.submit()">
+                        <option value="">Все</option>
+                        <option value="STATIC" {% if lease_type_filter == 'STATIC' %}selected{% endif %}>Статическая</option>
+                        <option value="DYNAMIC" {% if lease_type_filter == 'DYNAMIC' %}selected{% endif %}>Динамическая</option>
+                    </select>
+                </div>
+                <div class="col-md-2 col-12">
+                    <label for="status" class="form-label">Статус</label>
+                    <select name="status" id="status" class="form-select" onchange="this.form.submit()">
+                        <option value="">Все</option>
+                        <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>Активные</option>
+                        <option value="EXPIRED" {% if status_filter == 'EXPIRED' %}selected{% endif %}>Истёкшие</option>
+                    </select>
+                </div>
+                <div class="col-md-2 col-12 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Применить</button>
+                </div>
+            </div>
+            <input type="hidden" name="page" value="{{ page }}">
+            <input type="hidden" name="sort_by" id="sort_by" value="{{ sort_by }}">
+            <input type="hidden" name="sort_order" id="sort_order" value="{{ sort_order }}">
+            <input type="hidden" name="per_page" id="per_page_hidden" value="{{ per_page }}">
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-striped stats-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">
+                            <div class="th-resize-handle"></div>
+                        </th>
+                        <th>
+                            <a href="#" class="sort-link" data-sort-by="hostname" data-sort-order="{% if sort_by == 'hostname' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['hostname'] }}
+                                <i class="bi {% if sort_by == 'hostname' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'hostname' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'hostname' %}active{% endif %}"></i>
+                            </a>
+                            <div class="th-resize-handle"></div>
+                        </th>
+                        <th>
+                            <a href="#" class="sort-link" data-sort-by="ip" data-sort-order="{% if sort_by == 'ip' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['ip'] }}
+                                <i class="bi {% if sort_by == 'ip' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'ip' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'ip' %}active{% endif %}"></i>
+                            </a>
+                            <div class="th-resize-handle"></div>
+                        </th>
+                        <th>
+                            <a href="#" class="sort-link" data-sort-by="mac" data-sort-order="{% if sort_by == 'mac' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['mac'] }}
+                                <i class="bi {% if sort_by == 'mac' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'mac' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'mac' %}active{% endif %}"></i>
+                            </a>
+                            <div class="th-resize-handle"></div>
+                        </th>
+                        <th>
+                            <a href="#" class="sort-link" data-sort-by="is_expired" data-sort-order="{% if sort_by == 'is_expired' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['is_expired'] }}
+                                <i class="bi {% if sort_by == 'is_expired' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'is_expired' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'is_expired' %}active{% endif %}"></i>
+                            </a>
+                            <div class="th-resize-handle"></div>
+                        </th>
+                        <th>
+                            <a href="#" class="sort-link" data-sort-by="lease_type" data-sort-order="{% if sort_by == 'lease_type' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['lease_type'] }}
+                                <i class="bi {% if sort_by == 'lease_type' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'lease_type' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'lease_type' %}active{% endif %}"></i>
+                            </a>
+                            <div class="th-resize-handle"></div>
+                        </th>
+                        <th>
+                            <a href="#" class="sort-link" data-sort-by="expire_at" data-sort-order="{% if sort_by == 'expire_at' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['time_to_expiry'] }}
+                                <i class="bi {% if sort_by == 'expire_at' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'expire_at' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'expire_at' %}active{% endif %}"></i>
+                            </a>
+                            <div class="th-resize-handle"></div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td>
+                                <button type="button" class="toggle-details" data-bs-toggle="collapse" data-bs-target="#details-{{ loop.index }}" aria-expanded="false" aria-controls="details-{{ loop.index }}">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </td>
+                            <td>
+								<span class="editable-cell hostname-cell {% if row[columns.index('is_custom_hostname')] == 'Да' %}custom-hostname{% endif %} {% if row[columns.index('trust_flag')] == 'Присутствует' %}trusted-device{% endif %}" data-mac="{{ row[columns.index('mac')] }}" data-value="{{ row[columns.index('hostname')] }}">
+									{% if row[columns.index('trust_flag')] == 'Присутствует' %}
+										<i class="bi bi-shield-check text-success me-1" style="font-size: 0.8em;" title="Доверенное устройство" data-bs-toggle="tooltip"></i>
+									{% endif %}
+									{{ row[columns.index('hostname')] }}
+									<img class="edit-icon" alt="Редактировать">
+								</span>
+								<form class="edit-field hostname-edit d-none" action="{{ url_for('update_hostname') }}" method="POST">
+									<input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+									<input type="text" name="hostname" class="form-control" value="{{ row[columns.index('hostname')] }}">
+									<button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check"></i></button>
+									<button type="button" class="btn btn-sm btn-danger cancel-edit"><i class="bi bi-x"></i></button>
+								</form>
+							</td>
+                            <td>
+                                <span class="editable-cell ip-cell" data-mac="{{ row[columns.index('mac')] }}" data-value="{{ row[columns.index('ip')] }}">
+                                    {{ row[columns.index('ip')] }}
+                                    <img class="edit-icon" alt="Редактировать">
+                                </span>
+                                <form class="edit-field ip-edit d-none" action="{{ url_for('set_static') }}" method="POST">
+                                    <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                    <input type="text" name="ip" class="form-control" value="{{ row[columns.index('ip')] }}">
+                                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check"></i></button>
+                                    <button type="button" class="btn btn-sm btn-danger cancel-edit"><i class="bi bi-x"></i></button>
+                                </form>
+                            </td>
+                            <td>{{ row[columns.index('mac')] }}</td>
+                            <td class="{% if row[columns.index('is_expired')] == 'Неактивно' %}status-expired fw-bold{% else %}status-active fw-bold{% endif %}">
+								{{ row[columns.index('is_expired')] }}
+							</td>
+                            <td class="{% if row[columns.index('lease_type')] == 'Статическая' %}lease-static{% else %}lease-dynamic{% endif %}" style="color: {% if row[columns.index('lease_type')] == 'Статическая' %}#28a745{% else %}#007bff{% endif %} !important;">
+                                {{ row[columns.index('lease_type')] }}
+                            </td>
+                            <td>{{ row[-1] }}</td>
+                        </tr>
+                        <tr class="details-row collapse" id="details-{{ loop.index }}">
+                            <td colspan="7">
+                                <div class="mb-2">
+                                    {% if row[columns.index('is_custom_hostname')] == 1 %}
+                                        <form method="POST" action="{{ url_for('reset_hostname_manual') }}" class="d-inline">
+                                            <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                            <button type="submit" class="btn btn-outline-warning btn-sm">Сбросить имя</button>
+                                        </form>
+                                    {% endif %}
+                                    {% if row[columns.index('lease_type')] == 'Статическая' %}
+                                        <form method="POST" action="{{ url_for('set_dynamic') }}" class="d-inline">
+                                            <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                            <button type="submit" class="btn btn-outline-warning btn-sm">Сделать динамическим</button>
+                                        </form>
+                                    {% else %}
+                                        <button type="button" class="btn btn-outline-warning btn-sm reset-lease-btn" data-bs-toggle="modal" data-bs-target="#resetLeaseModal" data-mac="{{ row[columns.index('mac')] }}">
+                                            Сбросить аренду
+                                        </button>
+                                        <form method="POST" action="{{ url_for('reset_lease') }}" class="d-inline reset-lease-form" id="reset-lease-form-{{ row[columns.index('mac')] }}">
+                                            <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                        </form>
+                                    {% endif %}
+									{% if row[columns.index('trust_flag')] == 'Отсутствует' %}
+										<form method="POST" action="{{ url_for('set_trust') }}" class="d-inline">
+											<input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+											<input type="hidden" name="trust_flag" value="1">
+											<button type="submit" class="btn btn-outline-success btn-sm">Сделать доверенным</button>
+										</form>
+									{% else %}
+										<form method="POST" action="{{ url_for('set_trust') }}" class="d-inline">
+											<input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+											<input type="hidden" name="trust_flag" value="0">
+											<button type="submit" class="btn btn-outline-warning btn-sm">Снять доверие</button>
+										</form>
+									{% endif %}
+                                    {% if row[columns.index('is_blocked')] == 'Заблокировано' %}
+                                        <form method="POST" action="{{ url_for('unblock_device') }}" class="d-inline">
+                                            <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                            <button type="submit" class="btn btn-outline-success btn-sm">Разблокировать</button>
+                                        </form>
+                                    {% else %}
+                                        <button type="button" class="btn btn-outline-danger btn-sm block-device-btn" data-bs-toggle="modal" data-bs-target="#blockDeviceModal" data-mac="{{ row[columns.index('mac')] }}">
+                                            Заблокировать
+                                        </button>
+                                        <form method="POST" action="{{ url_for('block_device') }}" class="d-inline block-device-form" id="block-device-form-{{ row[columns.index('mac')] }}">
+                                            <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                        </form>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-outline-danger btn-sm delete-lease-btn" data-bs-toggle="modal" data-bs-target="#deleteLeaseModal" data-mac="{{ row[columns.index('mac')] }}">
+                                        Удалить
+                                    </button>
+                                    <form method="POST" action="{{ url_for('delete') }}" class="d-inline delete-lease-form" id="delete-lease-form-{{ row[columns.index('mac')] }}">
+                                        <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                    </form>
+                                </div>
+                                <div class="table-wrapper mt-3">
+									<table class="table mb-0">
+										<tbody>
+											{% for col in ['id', 'mac', 'ip', 'hostname', 'client_id', 'create_channel', 'created_at', 'updated_at', 'expire_at', 'is_expired', 'lease_type', 'is_blocked', 'is_custom_hostname', 'trust_flag'] %}
+												<tr>
+													<th>{{ column_names[col] }}</th>
+													<td>{{ row[columns.index(col)] }}</td>
+												</tr>
+											{% endfor %}
+										</tbody>
+									</table>
+								</div>
+                                <div class="history-section">
+                                    <h6>История изменений: <a href="{{ url_for('history', mac=row[columns.index('mac')]) }}" class="ms-2">Показать полностью</a></h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-striped history-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Дата</th>
+                                                    <th>Действие</th>
+                                                    <th>Описание</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for hist in lease_histories[loop.index0] %}
+                                                    <tr>
+                                                        <td>{{ hist.timestamp }}</td>
+                                                        <td>{{ hist.action }}</td>
+                                                        <td>{{ hist.description }}</td>
+                                                    </tr>
+                                                {% else %}
+                                                    <tr>
+                                                        <td colspan="3">Нет записей</td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center">Нет клиентов</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h3 class="mt-4 mb-2">Добавить статическую привязку</h3>
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="single-tab" data-bs-toggle="tab" href="#single" role="tab" aria-controls="single" aria-selected="true">Единичное добавление</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="bulk-tab" data-bs-toggle="tab" href="#bulk" role="tab" aria-controls="bulk" aria-selected="false">Массовое добавление</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="single" role="tabpanel" aria-labelledby="single-tab">
+                        <form method="POST" action="{{ url_for('add_static') }}">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="mac" class="form-label">MAC-адрес</label>
+                                    <input type="text" name="mac" id="mac" class="form-control" placeholder="aa:bb:cc:dd:ee:ff" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="ip" class="form-label">IP-адрес</label>
+                                    <input type="text" name="ip" id="ip" class="form-control" placeholder="192.168.1.x" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="hostname" class="form-label">Имя хоста (необязательно)</label>
+                                    <input type="text" name="hostname" id="hostname" class="form-control" placeholder="Имя хоста">
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary">Добавить</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="tab-pane fade" id="bulk" role="tabpanel" aria-labelledby="bulk-tab">
+                        <form method="POST" action="{{ url_for('add_static') }}">
+                            <div class="mb-3">
+                                <label for="bulk_data" class="form-label">Список привязок (формат: mac;ip;hostname, по одной на строку)</label>
+                                <textarea name="bulk_data" id="bulk_data" class="form-control add-static-form" placeholder="00:11:22:33:44:55;192.168.1.100;client1&#10;00:11:22:33:44:56;192.168.1.101"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Добавить</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3 pagination-wrapper">
+            <div class="d-flex justify-content-between align-items-center flex-column flex-sm-row per-page-container">
+                <div class="d-flex align-items-center gap-2 mb-2 mb-sm-0">
+                    <label for="per_page" class="form-label mb-0">Клиентов на странице:</label>
+                    <select name="per_page" id="per_page" class="form-select" style="width: auto;" onchange="updatePerPage(this.value)">
+                        {% for option in [5, 10, 20, 50] %}
+                            <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <nav aria-label="Пагинация клиентов">
+                    <ul class="pagination justify-content-center mb-0">
+                        <!-- Кнопка "Предыдущая" -->
+                        <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('index', page=page-1, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}" aria-label="Предыдущая">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                        
+                        <!-- Сокращенная пагинация -->
+                        {% set total_pages = total_pages|int %}
+                        {% set current_page = page|int %}
+                        
+                        {% if total_pages <= 7 %}
+                            {# Если страниц мало, показываем все #}
+                            {% for p in range(1, total_pages + 1) %}
+                                <li class="page-item {% if p == current_page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('index', page=p, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                                </li>
+                            {% endfor %}
+                        {% else %}
+                            {# Показываем первые 2 страницы #}
+                            <li class="page-item {% if 1 == current_page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('index', page=1, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">1</a>
+                            </li>
+                            <li class="page-item {% if 2 == current_page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('index', page=2, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">2</a>
+                            </li>
+                            
+                            {# Многоточие после первых 2 страниц #}
+                            {% if current_page > 4 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                            
+                            {# Показываем 3 страницы до и включая текущую #}
+                            {% for offset in [0, 1, 2] %}
+                                {% set p = current_page - offset %}
+                                {% if p >= 3 and p <= total_pages - 2 %}
+                                    <li class="page-item {% if p == current_page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('index', page=p, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {# Показываем 2 страницы после текущей #}
+                            {% for offset in [1, 2] %}
+                                {% set p = current_page + offset %}
+                                {% if p >= 3 and p <= total_pages - 2 %}
+                                    <li class="page-item {% if p == current_page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('index', page=p, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {# Многоточие перед последними 2 страницами #}
+                            {% if current_page < total_pages - 3 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                            
+                            {# Показываем последние 2 страницы #}
+                            <li class="page-item {% if total_pages - 1 == current_page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('index', page=total_pages-1, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ total_pages - 1 }}</a>
+                            </li>
+                            <li class="page-item {% if total_pages == current_page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('index', page=total_pages, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ total_pages }}</a>
+                            </li>
+                        {% endif %}
+                        
+                        <!-- Кнопка "Следующая" -->
+                        <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('index', page=page+1, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}" aria-label="Следующая">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            <p class="text-center mt-2">Показано {{ start_index }}-{{ end_index }} из {{ total_leases }} клиентов (Страница {{ page }} из {{ total_pages }})</p>
+        </div>
+    </div>
+
+    <!-- Модальное окно для логов -->
+    <div class="modal fade" id="logsModal" tabindex="-1" aria-labelledby="logsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="logsModalLabel">Логи сервера</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <pre id="logs-content">Загрузка логов...</pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для подтверждения блокировки -->
+    <div class="modal fade" id="blockDeviceModal" tabindex="-1" aria-labelledby="blockDeviceModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="blockDeviceModalLabel">Подтверждение блокировки</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Вы уверены, что хотите заблокировать устройство с MAC-адресом <span id="block-mac"></span>?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-danger confirm-block">Заблокировать</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для подтверждения сброса аренды -->
+    <div class="modal fade" id="resetLeaseModal" tabindex="-1" aria-labelledby="resetLeaseModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="resetLeaseModalLabel">Подтверждение сброса аренды</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Вы уверены, что хотите сбросить аренду для устройства с MAC-адресом <span id="reset-mac"></span>? Выданный IP-адрес будет освобождён. Убедитесь, что устройство отключено от сети во избежания дублирования IP-адресов.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-warning confirm-reset">Сбросить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для подтверждения удаления -->
+    <div class="modal fade" id="deleteLeaseModal" tabindex="-1" aria-labelledby="deleteLeaseModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteLeaseModalLabel">Подтверждение удаления</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Вы уверены, что хотите удалить устройство с MAC-адресом <span id="delete-mac"></span>?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-danger confirm-delete">Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <footer class="mt-4 text-center">
+        <small class="text-dark">© 2025 Eventuro, DHCP Server</small>
+    </footer>
+    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+    <script>
+        function updatePerPage(value) {
+            // Сохраняем в localStorage
+            localStorage.setItem('indexPerPage', value);
+            
+            // Обновляем скрытое поле
+            document.getElementById('per_page_hidden').value = value;
+            
+            // Отправляем форму с новым значением
+            document.getElementById('filter-form').submit();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const themeToggle = document.getElementById('theme-toggle');
+            const currentTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-bs-theme', currentTheme);
+            themeToggle.textContent = currentTheme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
+
+            themeToggle.addEventListener('click', () => {
+                const newTheme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-bs-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                themeToggle.textContent = newTheme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
+            });
+
+            document.querySelectorAll('.toggle-details').forEach(button => {
+                button.addEventListener('click', () => {
+                    const icon = button.querySelector('i');
+                    icon.classList.toggle('bi-chevron-right');
+                    icon.classList.toggle('bi-chevron-down');
+                });
+            });
+
+            document.querySelectorAll('.editable-cell').forEach(cell => {
+                cell.addEventListener('click', () => {
+                    const parentTd = cell.parentElement;
+                    const editForm = parentTd.querySelector('.edit-field');
+                    cell.classList.add('d-none');
+                    editForm.classList.remove('d-none');
+                    editForm.querySelector('input').focus();
+                });
+            });
+
+            document.querySelectorAll('.cancel-edit').forEach(button => {
+                button.addEventListener('click', () => {
+                    const editForm = button.closest('.edit-field');
+                    const cell = editForm.previousElementSibling;
+                    editForm.classList.add('d-none');
+                    cell.classList.remove('d-none');
+                });
+            });
+
+            document.querySelectorAll('.block-device-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const mac = button.getAttribute('data-mac');
+                    document.getElementById('block-mac').textContent = mac;
+                    document.querySelector('.confirm-block').onclick = () => {
+                        document.getElementById(`block-device-form-${mac}`).submit();
+                    };
+                });
+            });
+
+            document.querySelectorAll('.reset-lease-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const mac = button.getAttribute('data-mac');
+                    document.getElementById('reset-mac').textContent = mac;
+                    document.querySelector('.confirm-reset').onclick = () => {
+                        document.getElementById(`reset-lease-form-${mac}`).submit();
+                    };
+                });
+            });
+
+            document.querySelectorAll('.delete-lease-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const mac = button.getAttribute('data-mac');
+                    document.getElementById('delete-mac').textContent = mac;
+                    document.querySelector('.confirm-delete').onclick = () => {
+                        document.getElementById(`delete-lease-form-${mac}`).submit();
+                    };
+                });
+            });
+
+            document.querySelectorAll('.sort-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const sortBy = link.getAttribute('data-sort-by');
+                    const sortOrder = link.getAttribute('data-sort-order');
+                    document.getElementById('sort_by').value = sortBy;
+                    document.getElementById('sort_order').value = sortOrder;
+                    document.getElementById('filter-form').submit();
+                });
+            });
+
+            const logsModal = document.getElementById('logsModal');
+            logsModal.addEventListener('show.bs.modal', () => {
+                const logsContent = document.getElementById('logs-content');
+                logsContent.textContent = 'Загрузка логов...';
+                fetch('{{ url_for("logs") }}')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.logs) {
+                            logsContent.textContent = data.logs;
+                        } else {
+                            logsContent.textContent = data.error || 'Не удалось загрузить логи.';
+                        }
+                        setTimeout(() => {
+                            logsContent.scrollTop = logsContent.scrollHeight;
+                        }, 50);
+                    })
+                    .catch(() => {
+                        logsContent.textContent = 'Ошибка загрузки логов.';
+                        setTimeout(() => {
+                            logsContent.scrollTop = logsContent.scrollHeight;
+                        }, 50);
+                    });
+            });
+
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+
+            // Ручное изменение размеров колонок
+            const resizers = document.querySelectorAll('.th-resize-handle');
+            let currentResizer, startX, startWidth, thElement;
+
+            resizers.forEach(resizer => {
+                resizer.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    currentResizer = resizer;
+                    thElement = resizer.parentElement;
+                    startX = e.pageX;
+                    startWidth = thElement.getBoundingClientRect().width;
+                    currentResizer.classList.add('active');
+                    document.addEventListener('mousemove', resize);
+                    document.addEventListener('mouseup', stopResize);
+                });
+            });
+
+            function resize(e) {
+                if (currentResizer) {
+                    const newWidth = startWidth + (e.pageX - startX);
+                    if (newWidth >= 50 && newWidth <= 500) {
+                        thElement.style.width = `${newWidth}px`;
+                        thElement.style.minWidth = `${newWidth}px`;
+                        const colIndex = Array.from(thElement.parentElement.children).indexOf(thElement);
+                        localStorage.setItem(`columnWidth_${colIndex}`, newWidth);
+                    }
+                }
+            }
+
+            function stopResize() {
+                if (currentResizer) {
+                    currentResizer.classList.remove('active');
+                    currentResizer = null;
+                    document.removeEventListener('mousemove', resize);
+                    document.removeEventListener('mouseup', stopResize);
+                }
+            }
+
+            document.querySelectorAll('.stats-table th').forEach((th, index) => {
+                const savedWidth = localStorage.getItem(`columnWidth_${index}`);
+                if (savedWidth) {
+                    th.style.width = `${savedWidth}px`;
+                    th.style.minWidth = `${savedWidth}px`;
+                }
+            });
+
+            // Автоматическое восстановление per_page при загрузке страницы
+            const savedPerPage = localStorage.getItem('indexPerPage');
+            const currentPerPage = {{ per_page }};
+            const perPageSelect = document.getElementById('per_page');
+            const perPageHidden = document.getElementById('per_page_hidden');
+            
+            if (savedPerPage && parseInt(savedPerPage) !== currentPerPage) {
+                // Если сохраненное значение отличается от текущего, обновляем select и отправляем форму
+                perPageSelect.value = savedPerPage;
+                perPageHidden.value = savedPerPage;
+                // Добавляем небольшую задержку, чтобы избежать конфликта с загрузкой страницы
+                setTimeout(() => {
+                    document.getElementById('filter-form').submit();
+                }, 100);
+            } else if (savedPerPage) {
+                // Если значение совпадает, просто обновляем select
+                perPageSelect.value = savedPerPage;
+                perPageHidden.value = savedPerPage;
+            }
+        });
+    </script>
+</body>
+</html>

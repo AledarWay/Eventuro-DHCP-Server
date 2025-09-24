@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>История изменений DHCP</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='bootstrap-icons.css') }}" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5;
+            background-image: url('{{ url_for('static', filename='background.jpg') }}');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-attachment: fixed;
+            opacity: 0.9;
+        }
+        [data-bs-theme="dark"] body {
+            background-color: #1a1a1a;
+            background-image: url('{{ url_for('static', filename='background.jpg') }}');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-attachment: fixed;
+            opacity: 0.9;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-left: auto;
+            margin-right: auto;
+        }
+        [data-bs-theme="dark"] .container {
+            background-color: rgba(26, 26, 26, 0.95);
+            color: #e0e0e0;
+        }
+        .table {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+        }
+        [data-bs-theme="dark"] .table {
+            background-color: rgba(37, 37, 37, 0.95) !important;
+            color: #e0e0e0;
+        }
+        .table td, .table th {
+            background-color: transparent !important;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+        }
+        [data-bs-theme="dark"] .table td, [data-bs-theme="dark"] .table th {
+            text-shadow: 0 1px 1px rgba(255, 255, 255, 0.2);
+        }
+        .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: rgba(245, 245, 245, 0.95) !important;
+        }
+        [data-bs-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: rgba(37, 37, 37, 0.95) !important;
+        }
+        .alert {
+            background-color: rgba(255, 255, 255, 0.95);
+        }
+        [data-bs-theme="dark"] .alert {
+            background-color: rgba(26, 26, 26, 0.95);
+            color: #e0e0e0;
+        }
+        .history-table {
+            font-size: 0.9rem;
+            width: 100%;
+            table-layout: auto !important;
+            margin-bottom: 0;
+        }
+        .history-table th, .history-table td {
+            vertical-align: middle;
+            padding: 0.5rem;
+            box-sizing: border-box;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-table th:nth-child(1), .history-table td:nth-child(1) {
+            width: 20%;
+        }
+        .history-table th:nth-child(2), .history-table td:nth-child(2) {
+            width: 15%;
+        }
+        .history-table th:nth-child(3), .history-table td:nth-child(3) {
+            width: 20%;
+        }
+        .history-table th:nth-child(4), .history-table td:nth-child(4) {
+            width: 15%;
+        }
+        .history-table th:nth-child(5), .history-table td:nth-child(5) {
+            width: 30%;
+        }
+        [data-bs-theme="dark"] .form-control,
+        [data-bs-theme="dark"] .form-select {
+            background-color: rgba(51, 51, 51, 0.95);
+            color: #e0e0e0;
+            border-color: #555555;
+        }
+        [data-bs-theme="dark"] a,
+        [data-bs-theme="dark"] .btn-outline-primary {
+            color: #66b3ff;
+        }
+        [data-bs-theme="dark"] a:hover,
+        [data-bs-theme="dark"] .btn-outline-primary:hover {
+            color: #99ccff;
+        }
+        .sort-link {
+            color: inherit;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .sort-link:hover {
+            color: #007bff;
+        }
+        [data-bs-theme="dark"] .sort-link:hover {
+            color: #99ccff;
+        }
+        .sort-icon {
+            font-size: 0.8rem;
+            opacity: 0.5;
+        }
+        .sort-icon.active {
+            opacity: 1;
+        }
+        .th-resize-handle {
+            position: absolute;
+            top: 0;
+            right: -5px;
+            width: 10px;
+            height: 100%;
+            background-color: transparent;
+            cursor: col-resize;
+            user-select: none;
+            z-index: 1000;
+        }
+        .th-resize-handle:hover,
+        .th-resize-handle.active {
+            background-color: rgba(0, 123, 255, 0.5);
+        }
+        .history-table th {
+            position: relative;
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        .mac-input-container {
+            position: relative;
+        }
+        #mac-input {
+            display: none;
+        }
+        .pagination .page-item.disabled .page-link {
+            color: #6c757d;
+            pointer-events: none;
+            cursor: auto;
+            background-color: rgba(0, 0, 0, 0.03);
+        }
+        [data-bs-theme="dark"] .pagination .page-item.disabled .page-link {
+            color: #6c757d;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .pagination .page-link {
+            min-width: 36px;
+            text-align: center;
+            padding: 0.375rem 0.75rem;
+        }
+        @media (max-width: 767px) {
+            body {
+                font-size: 1rem;
+            }
+            .container {
+                margin-left: 15px;
+                margin-right: 15px;
+                padding: 15px;
+                max-width: calc(100% - 30px);
+            }
+            .btn {
+                font-size: 0.85rem;
+                padding: 0.4rem 0.8rem;
+                min-width: 80px;
+                box-sizing: border-box;
+            }
+            .form-control,
+            .form-select {
+                font-size: 0.9rem;
+            }
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            .history-table {
+                font-size: 0.8rem;
+                min-width: 600px;
+            }
+            .history-table th, .history-table td {
+                padding: 0.4rem;
+            }
+            .row.g-3 > .col-md-2 {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+            .per-page-container {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            .pagination {
+                margin-bottom: 0.5rem;
+            }
+            .th-resize-handle {
+                display: none;
+            }
+            .d-flex.gap-2 {
+                flex-wrap: wrap;
+                gap: 0.1rem !important;
+                justify-content: space-between;
+            }
+            .d-flex.gap-2 .btn {
+                width: 145px;
+                min-width: 120px;
+                margin-right: 0.25rem;
+                text-align: center;
+                font-size: 0.8rem;
+                padding: 0.3rem 0.6rem;
+                box-sizing: border-box;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .pagination .page-link {
+                min-width: 32px;
+                padding: 0.25rem 0.5rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container my-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+            <h1>История изменений DHCP</h1>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-primary mt-2 mt-md-0">Вернуться к клиентам</a>
+                <button id="theme-toggle" class="btn btn-outline-secondary mt-2 mt-md-0">Тёмная тема</button>
+                <form method="POST" action="{{ url_for('logout') }}" class="d-inline">
+                    <button type="submit" class="btn btn-outline-secondary mt-2 mt-md-0">Выйти</button>
+                </form>
+            </div>
+        </div>
+
+        <h3 class="mb-2">Фильтры истории:</h3>
+        <form method="GET" class="mb-3" id="filter-form">
+            <div class="row g-3">
+                <div class="col-md-2 col-12 mac-input-container">
+                    <label for="mac-select" class="form-label">Клиенты</label>
+                    <select name="mac" id="mac-select" class="form-select">
+                        <option value="">Все</option>
+                        {% for client in clients_list %}
+                            <option value="{{ client[0] }}" {% if mac_filter == client[0] %}selected{% endif %}>{{ client[0] }} ({{ client[1] or 'не указано' }})</option>
+                        {% endfor %}
+                        <option value="manual" {% if mac_filter and mac_filter not in clients_list|map(attribute=0)|list %}selected{% endif %}>Ввести вручную</option>
+                    </select>
+                    <input type="text" id="mac-input" class="form-control mt-1" placeholder="aa:bb:cc:dd:ee:ff" value="{{ mac_filter if mac_filter and mac_filter not in clients_list|map(attribute=0)|list else '' }}">
+                </div>
+                <div class="col-md-2 col-12">
+                    <label for="action" class="form-label">Действие</label>
+                    <select name="action" id="action" class="form-select" onchange="this.form.submit()">
+                        <option value="">Все</option>
+                        {% for action in action_names.keys() %}
+                            <option value="{{ action }}" {% if action_filter == action %}selected{% endif %}>{{ action_names[action] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-12">
+                    <label for="timestamp" class="form-label">Дата</label>
+                    <input type="date" name="timestamp" id="timestamp" class="form-control" value="{{ timestamp_filter }}">
+                </div>
+                <div class="col-md-2 col-12 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Применить</button>
+                </div>
+            </div>
+            <input type="hidden" name="page" value="{{ page }}">
+            <input type="hidden" name="sort_by" id="sort_by" value="{{ sort_by }}">
+            <input type="hidden" name="sort_order" id="sort_order" value="{{ sort_order }}">
+            <input type="hidden" name="per_page" id="per_page_hidden" value="{{ per_page }}">
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-striped history-table">
+                <thead>
+                    <tr>
+                        <th>
+                            <div class="th-resize-handle"></div>
+                            <a href="#" class="sort-link" data-sort-by="timestamp" data-sort-order="{% if sort_by == 'timestamp' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['timestamp'] }}
+                                <i class="bi {% if sort_by == 'timestamp' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'timestamp' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'timestamp' %}active{% endif %}"></i>
+                            </a>
+                        </th>
+                        <th><div class="th-resize-handle"></div>{{ column_names['mac'] }}</th>
+                        <th>
+                            <div class="th-resize-handle"></div>
+                            <a href="#" class="sort-link" data-sort-by="name" data-sort-order="{% if sort_by == 'name' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['name'] }}
+                                <i class="bi {% if sort_by == 'name' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'name' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'name' %}active{% endif %}"></i>
+                            </a>
+                        </th>
+                        <th>
+                            <div class="th-resize-handle"></div>
+                            <a href="#" class="sort-link" data-sort-by="action" data-sort-order="{% if sort_by == 'action' and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+                                {{ column_names['action'] }}
+                                <i class="bi {% if sort_by == 'action' and sort_order == 'asc' %}bi-arrow-up{% elif sort_by == 'action' and sort_order == 'desc' %}bi-arrow-down{% else %}bi-arrow-down{% endif %} sort-icon {% if sort_by == 'action' %}active{% endif %}"></i>
+                            </a>
+                        </th>
+                        <th><div class="th-resize-handle"></div>{{ column_names['description'] }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td>{{ row[0] }}</td>
+                            <td>{{ row[1] }}</td>
+                            <td>{{ row[2] }}</td>
+                            <td>{{ row[3] }}</td>
+                            <td>{{ row[4] }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="5">Нет записей</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-3 pagination-wrapper">
+            <div class="d-flex justify-content-between align-items-center flex-column flex-sm-row per-page-container">
+                <div class="d-flex align-items-center gap-2 mb-2 mb-sm-0">
+                    <label for="per_page" class="form-label mb-0">Записей на странице:</label>
+                    <select name="per_page" id="per_page" class="form-select" style="width: auto;" onchange="updatePerPage(this.value)">
+                        {% for option in [5, 10, 20, 50] %}
+                            <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <nav aria-label="Пагинация истории">
+                    <ul class="pagination justify-content-center mb-0">
+                        <!-- Кнопка "Предыдущая" -->
+                        <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('history', page=page-1, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}" aria-label="Предыдущая">
+                                <span aria-hidden="true">&laquo;</span>
+                            </a>
+                        </li>
+                        
+                        <!-- Сокращенная пагинация -->
+                        {% set total_pages = total_pages|int %}
+                        {% set current_page = page|int %}
+                        
+                        {% if total_pages <= 5 %}
+                            {# Если страниц мало, показываем все #}
+                            {% for p in range(1, total_pages + 1) %}
+                                <li class="page-item {% if p == current_page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('history', page=p, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                                </li>
+                            {% endfor %}
+                        {% else %}
+                            {# Показываем первые 2 страницы #}
+                            {% for p in range(1, 3) %}
+                                <li class="page-item {% if p == current_page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('history', page=p, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                                </li>
+                            {% endfor %}
+                            
+                            {# Показываем многоточие, если текущая страница далеко от начала #}
+                            {% if current_page > 4 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                            
+                            {# Показываем страницы вокруг текущей #}
+                            {% for p in range(max(1, current_page - 2), min(total_pages + 1, current_page + 3)) %}
+                                {% if p > 2 and p < total_pages - 1 %}
+                                    <li class="page-item {% if p == current_page %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('history', page=p, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {# Показываем многоточие, если текущая страница далеко от конца #}
+                            {% if current_page < total_pages - 3 %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                            
+                            {# Показываем последние 2 страницы #}
+                            {% for p in range(max(total_pages - 1, 3), total_pages + 1) %}
+                                <li class="page-item {% if p == current_page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('history', page=p, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
+                                </li>
+                            {% endfor %}
+                        {% endif %}
+                        
+                        <!-- Кнопка "Следующая" -->
+                        <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('history', page=page+1, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}" aria-label="Следующая">
+                                <span aria-hidden="true">&raquo;</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            <p class="text-center mt-2">Показано {{ start_index }}-{{ end_index }} из {{ total_history }} записей (Страница {{ page }} из {{ total_pages }})</p>
+        </div>
+    </div>
+    <footer class="mt-4 text-center">
+        <small class="text-dark">© 2025 Eventuro, DHCP Server</small>
+    </footer>
+    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+    <script>
+		function updatePerPage(value) {
+			// Сохраняем в localStorage
+			localStorage.setItem('historyPerPage', value);
+			
+			// Обновляем скрытое поле
+			document.getElementById('per_page_hidden').value = value;
+			
+			// Отправляем форму с новым значением
+			document.getElementById('filter-form').submit();
+		}
+
+		document.addEventListener('DOMContentLoaded', () => {
+			const themeToggle = document.getElementById('theme-toggle');
+			const currentTheme = localStorage.getItem('theme') || 'light';
+			document.documentElement.setAttribute('data-bs-theme', currentTheme);
+			themeToggle.textContent = currentTheme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
+
+			themeToggle.addEventListener('click', () => {
+				const newTheme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+				document.documentElement.setAttribute('data-bs-theme', newTheme);
+				localStorage.setItem('theme', newTheme);
+				themeToggle.textContent = newTheme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
+			});
+
+			document.querySelectorAll('.sort-link').forEach(link => {
+				link.addEventListener('click', (e) => {
+					e.preventDefault();
+					const sortBy = link.getAttribute('data-sort-by');
+					const sortOrder = link.getAttribute('data-sort-order');
+					document.getElementById('sort_by').value = sortBy;
+					document.getElementById('sort_order').value = sortOrder;
+					document.getElementById('filter-form').submit();
+				});
+			});
+
+			const resizers = document.querySelectorAll('.th-resize-handle');
+			let currentResizer, startX, startWidth, thElement;
+
+			resizers.forEach(resizer => {
+				resizer.addEventListener('mousedown', (e) => {
+					e.preventDefault();
+					currentResizer = resizer;
+					thElement = resizer.parentElement;
+					startX = e.pageX;
+					startWidth = thElement.getBoundingClientRect().width;
+					currentResizer.classList.add('active');
+					document.addEventListener('mousemove', resize);
+					document.addEventListener('mouseup', stopResize);
+				});
+			});
+
+			function resize(e) {
+				if (currentResizer) {
+					const newWidth = startWidth + (e.pageX - startX);
+					if (newWidth >= 50 && newWidth <= 500) {
+						thElement.style.width = `${newWidth}px`;
+						thElement.style.minWidth = `${newWidth}px`;
+						const colIndex = Array.from(thElement.parentElement.children).indexOf(thElement);
+						localStorage.setItem(`historyColumnWidth_${colIndex}`, newWidth);
+					}
+				}
+			}
+
+			function stopResize() {
+				if (currentResizer) {
+					currentResizer.classList.remove('active');
+					currentResizer = null;
+					document.removeEventListener('mousemove', resize);
+					document.removeEventListener('mouseup', stopResize);
+				}
+			}
+
+			document.querySelectorAll('.history-table th').forEach((th, index) => {
+				const savedWidth = localStorage.getItem(`historyColumnWidth_${index}`);
+				if (savedWidth) {
+					th.style.width = `${savedWidth}px`;
+					th.style.minWidth = `${savedWidth}px`;
+				}
+			});
+
+			// Логика для переключения между select и input для MAC-адреса
+			const macSelect = document.getElementById('mac-select');
+			const macInput = document.getElementById('mac-input');
+			macSelect.addEventListener('change', () => {
+				if (macSelect.value === 'manual') {
+					macInput.style.display = 'block';
+					macInput.name = 'mac';
+					macSelect.name = '';
+				} else {
+					macInput.style.display = 'none';
+					macInput.name = '';
+					macSelect.name = 'mac';
+				}
+			});
+
+			// Инициализация состояния при загрузке
+			if (macSelect.value === 'manual') {
+				macInput.style.display = 'block';
+				macInput.name = 'mac';
+				macSelect.name = '';
+			} else {
+				macInput.style.display = 'none';
+				macInput.name = '';
+				macSelect.name = 'mac';
+			}
+
+			// Автоматическое восстановление per_page при загрузке страницы
+			const savedPerPage = localStorage.getItem('historyPerPage');
+			const currentPerPage = {{ per_page }};
+			const perPageSelect = document.getElementById('per_page');
+			const perPageHidden = document.getElementById('per_page_hidden');
+			
+			if (savedPerPage && parseInt(savedPerPage) !== currentPerPage) {
+				// Если сохраненное значение отличается от текущего, обновляем select и отправляем форму
+				perPageSelect.value = savedPerPage;
+				perPageHidden.value = savedPerPage;
+				// Добавляем небольшую задержку, чтобы избежать конфликта с загрузкой страницы
+				setTimeout(() => {
+					document.getElementById('filter-form').submit();
+				}, 100);
+			} else if (savedPerPage) {
+				// Если значение совпадает, просто обновляем select
+				perPageSelect.value = savedPerPage;
+				perPageHidden.value = savedPerPage;
+			}
+		});
+	</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+#!/bin/sh /etc/rc.common
+# Скрипт службы для запуска DHCP-сервера Eventuro-DHCP-Server на OpenWrt
+
+USE_PROCD=1
+START=95
+STOP=01
+
+# Путь к основному скрипту Python
+PROG="/mnt/Eventuro-DHCP-Server/main.py"
+# Путь к интерпретатору Python
+PYTHON="/usr/bin/python3"
+# Рабочая директория
+WORKING_DIR="/mnt/eventuro-dhcp"
+
+start_service() {
+    # Проверяем, существует ли исполняемый файл
+    [ -x "$PYTHON" ] || {
+        logger -t eventuro_dhcp "Python не найден по пути $PYTHON"
+        exit 1
+    }
+    [ -f "$PROG" ] || {
+        logger -t eventuro_dhcp "Скрипт $PROG не найден"
+        exit 1
+    }
+
+    logger -t eventuro_dhcp "Запускается DHCP-сервер eventuro-dhcp..."
+
+    # Настройка procd
+    procd_open_instance
+    procd_set_param command "$PYTHON" "$PROG"
+    procd_set_param file "$PROG"
+    procd_set_param respawn # Перезапускаем при сбое
+    procd_set_param stdout 1 # Перенаправляем stdout в logd
+    procd_set_param stderr 1 # Перенаправляем stderr в logd
+    procd_set_param pidfile /var/run/eventuro_dhcp.pid
+    procd_set_param env PYTHONPATH="$WORKING_DIR"
+    procd_set_param nice -5 # Приоритет процесса
+    procd_append_param workdir "$WORKING_DIR"
+    procd_close_instance
+}
+
+stop_service() {
+    logger -t eventuro_dhcp "Останавливается DHCP-сервер eventuro-dhcp..."
+}
+
+service_running() {
+    logger -t eventuro_dhcp "Проверка статуса DHCP-сервера eventuro-dhcp..."
+}
+
+reload_service() {
+    logger -t eventuro_dhcp "Перезапуск DHCP-сервера eventuro-dhcp..."
+    stop
+    start
+}
