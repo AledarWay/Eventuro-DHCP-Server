@@ -26,8 +26,7 @@ def flatten_config(config):
             'interface', 'server_ip', 'pool_start', 'pool_end', 'subnet_mask',
             'gateway', 'dns_servers', 'lease_time', 'domain_name'
         ],
-        'server': ['cache_ttl', 'expire_check_period', 'dhcp_auth_enabled', 
-                   'dhcp_auth_key', 'dhcp_auth_realm', 'forcerenew_without_auth'],
+        'server': ['cache_ttl', 'expire_check_period'],
         'web': ['web_host', 'web_port', 'web_lease_history_limit'],
         'database': ['db_file', 'auth_db_file', 'history_db_file', 'history_cleanup_days'],
         'logging': ['log_file', 'log_level', 'max_log_size_mb', 'max_log_backup_count'],
