@@ -588,9 +588,9 @@ def create_app(server, db_manager, auth_manager):
             row = cursor.fetchone()
             if row:
                 old_ip, hostname, lease_type = row
-                if lease_type == 'STATIC':
-                    flash(f"MAC {mac} уже имеет статическую аренду", "danger")
-                    return redirect(url_for('index'))
+                # if lease_type == 'STATIC':
+                #     flash(f"MAC {mac} уже имеет статическую аренду", "danger")
+                #     return redirect(url_for('index'))
                 db_manager.update_ip(mac, ip, change_channel='WEB')
                 db_manager.update_lease_type(mac, 'STATIC', change_channel='WEB')
                 flash(f"Статическая аренда установлена для MAC {mac}: IP {ip}", "success")
