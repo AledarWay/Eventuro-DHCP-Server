@@ -1,5 +1,6 @@
 {
-	"interface": "br-lan",
+  "network": {
+    "interface": "br-lan",
     "server_ip": "192.168.1.1",
     "pool_start": "192.168.1.50",
     "pool_end": "192.168.1.240",
@@ -7,30 +8,47 @@
     "gateway": "192.168.1.1",
     "dns_servers": ["8.8.8.8", "1.1.1.1"],
     "lease_time": 604800,
-    "domain_name": "MyDomain.local",
-	"cache_ttl": 30,
-	"api_cache_ttl": 30,
+    "domain_name": "MyDomain.local"
+  },
+  "server": {
+    "cache_ttl": 30,
+    "expire_check_period": 300,
+    "dhcp_auth_enabled": false,
+    "dhcp_auth_key": "your_hex_key_here",
+    "dhcp_auth_realm": "MyDomain.local",
+    "forcerenew_without_auth": false
+  },
+  "web": {
     "web_host": "0.0.0.0",
     "web_port": 5500,
-	"db_file": "dhcp_leases.db",
-	"auth_db_file": "web_auth.db",
-	"history_db_file": "dhcp_lease_history.db",
-	"history_cleanup_days": 30,
+    "web_lease_history_limit": 10
+  },
+  "database": {
+    "db_file": "dhcp_leases.db",
+    "auth_db_file": "web_auth.db",
+    "history_db_file": "dhcp_lease_history.db",
+    "history_cleanup_days": 30
+  },
+  "logging": {
     "log_file": "dhcp_server.log",
     "log_level": "INFO",
-	"api_token": "6pItIzsU9UYVYRW0OEEjTxg0A6k2JBjBSGgtCEOjqFypkP9g6iDadILVbzS4jLAj",
-    "expire_check_period": 300,
-	"web_lease_history_limit": 10,
-	"telegram_enabled": false,
-	"telegram_notify_new_device": true,
+    "max_log_size_mb": 10,
+    "max_log_backup_count": 10
+  },
+  "api": {
+    "api_cache_ttl": 30,
+    "api_token": "6pItIzsU9UYVYRW0OEEjTxg0A6k2JBjBSGgtCEOjqFypkP9g6iDadILVbzS4jLAj"
+  },
+  "telegram": {
+    "telegram_enabled": false,
+    "telegram_notify_new_device": true,
     "telegram_notify_inactive_device": true,
-	"inactive_period": "7d",
+    "inactive_period": "7d",
     "telegram_bot_token": "BOT_TOKEN_HERE",
     "telegram_chat_id": "CHAT_ID_HERE",
-	"telegram_thread_id": "THREAD_ID_HERE",
+    "telegram_thread_id": "THREAD_ID_HERE",
     "telegram_web_url": "http://192.168.1.1:5500/",
     "telegram_retries": 3,
-    "telegram_retry_interval": 5,
-	"max_log_size_mb": 10,
-	"max_log_backup_count": 10
+    "telegram_retry_interval": 5
+  }
 }

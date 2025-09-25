@@ -54,10 +54,12 @@
 
 ## Конфигурация
 
-Конфигурация хранится в файле `config.json` в корне проекта. Все пути к файлам (БД, логи) указываются относительно корня проекта. Пример файла:
+Конфигурация хранится в файле `config.json` в корне проекта. Все пути к файлам (БД, логи) указываются относительно корня проекта. Конфигурация разделена на логические секции для удобства управления.
 
+Пример файла:
 ```json
 {
+  "network": {
     "interface": "br-lan",
     "server_ip": "192.168.1.1",
     "pool_start": "192.168.1.50",
@@ -66,20 +68,38 @@
     "gateway": "192.168.1.1",
     "dns_servers": ["8.8.8.8", "1.1.1.1"],
     "lease_time": 604800,
-    "domain_name": "MyDomain.local",
+    "domain_name": "MyDomain.local"
+  },
+  "server": {
     "cache_ttl": 30,
-    "api_cache_ttl": 30,
+    "expire_check_period": 300,
+    "dhcp_auth_enabled": false,
+    "dhcp_auth_key": "your_hex_key_here",
+    "dhcp_auth_realm": "MyDomain.local",
+    "forcerenew_without_auth": false
+  },
+  "web": {
     "web_host": "0.0.0.0",
     "web_port": 5500,
+    "web_lease_history_limit": 10
+  },
+  "database": {
     "db_file": "dhcp_leases.db",
     "auth_db_file": "web_auth.db",
     "history_db_file": "dhcp_lease_history.db",
-    "history_cleanup_days": 30,
+    "history_cleanup_days": 30
+  },
+  "logging": {
     "log_file": "dhcp_server.log",
     "log_level": "INFO",
-    "api_token": "6pItIzsU9UYVYRW0OEEjTxg0A6k2JBjBSGgtCEOjqFypkP9g6iDadILVbzS4jLAj",
-    "expire_check_period": 300,
-    "web_lease_history_limit": 10,
+    "max_log_size_mb": 10,
+    "max_log_backup_count": 10
+  },
+  "api": {
+    "api_cache_ttl": 30,
+    "api_token": "6pItIzsU9UYVYRW0OEEjTxg0A6k2JBjBSGgtCEOjqFypkP9g6iDadILVbzS4jLAj"
+  },
+  "telegram": {
     "telegram_enabled": false,
     "telegram_notify_new_device": true,
     "telegram_notify_inactive_device": true,
@@ -89,14 +109,14 @@
     "telegram_thread_id": "THREAD_ID_HERE",
     "telegram_web_url": "http://192.168.1.1:5500/",
     "telegram_retries": 3,
-    "telegram_retry_interval": 5,
-    "max_log_size_mb": 10,
-    "max_log_backup_count": 10
+    "telegram_retry_interval": 5
+  }
 }
 ```
 
 ### Описание параметров
 
+#### Секция `network`
 - **interface**: Сетевой интерфейс для прослушки (например, "br-lan"). Если не указан, используется broadcast.
 - **server_ip**: IP-адрес DHCP-сервера.
 - **pool_start** / **pool_end**: Диапазон динамического пула IP.
@@ -105,18 +125,32 @@
 - **dns_servers**: Список DNS-серверов (массив строк).
 - **lease_time**: Время аренды в секундах (по умолчанию 604800 = 7 дней).
 - **domain_name**: Доменное имя сети.
+
+#### Секция `server`
 - **cache_ttl**: TTL кэша для повторных DHCP-запросов (секунды).
-- **api_cache_ttl**: TTL кэша для API-ответов (секунды).
+- **expire_check_period**: Интервал проверки истекших аренд (секунды).
+
+#### Секция `web`
 - **web_host** / **web_port**: Хост и порт для веб-сервера (по умолчанию 0.0.0.0:5500).
+- **web_lease_history_limit**: Лимит отображения записей истории на клиента в веб-интерфейсе.
+
+#### Секция `database`
 - **db_file**: Путь к БД аренд (SQLite).
 - **auth_db_file**: Путь к БД аутентификации (SQLite).
 - **history_db_file**: Путь к БД истории (SQLite).
 - **history_cleanup_days**: Дней для хранения истории (0 = отключено; очищает только LEASE_RENEWED и INFORM).
+
+#### Секция `logging`
 - **log_file**: Путь к файлу логов.
 - **log_level**: Уровень логирования ("DEBUG", "INFO", "WARNING", "ERROR").
+- **max_log_size_mb**: Максимальный размер лог-файла (МБ) перед ротацией.
+- **max_log_backup_count**: Количество резервных лог-файлов.
+
+#### Секция `api`
+- **api_cache_ttl**: TTL кэша для API-ответов (секунды).
 - **api_token**: Токен для доступа к API (генерируйте случайный).
-- **expire_check_period**: Интервал проверки истекших аренд (секунды).
-- **web_lease_history_limit**: Лимит отображения записей истории на клиента в веб-интерфейсе.
+
+#### Секция `telegram`
 - **telegram_enabled**: Включить уведомления в Telegram (true/false).
 - **telegram_notify_new_device**: Уведомлять о новых устройствах.
 - **telegram_notify_inactive_device**: Уведомлять о устройствах после долгого отсутствия.
@@ -127,10 +161,9 @@
 - **telegram_web_url**: URL веб-интерфейса для ссылок в уведомлениях.
 - **telegram_retries**: Количество попыток отправки уведомления.
 - **telegram_retry_interval**: Интервал между попытками (секунды).
-- **max_log_size_mb**: Максимальный размер лог-файла (МБ) перед ротацией.
-- **max_log_backup_count**: Количество резервных лог-файлов.
 
-Конфиг валидируется при запуске. Если подсеть изменилась, сервер автоматически мигрирует аренды.
+### Примечания
+- Конфиг валидируется при запуске. Если подсеть изменилась, сервер автоматически мигрирует аренды.
 
 ## Запуск и использование
 

@@ -48,7 +48,7 @@ class DBManager:
                 )
             ''')
             conn.commit()
-        logging.debug("Инициализирована основная база данных SQLite.")
+        logging.info("Инициализирована основная база данных SQLite.")
 
     def init_history_db(self):
         with self.get_history_connection() as conn:
@@ -69,7 +69,7 @@ class DBManager:
                 )
             ''')
             conn.commit()
-        logging.debug("Инициализирована база данных истории SQLite.")
+        logging.info("Инициализирована база данных истории SQLite.")
 
     def clean_old_history(self):
         if self.history_cleanup_days == 0:
@@ -817,7 +817,7 @@ class AuthManager:
                     password_hash TEXT NOT NULL
                 )
             ''')
-        logging.debug("Инициализирована база данных аутентификации SQLite.")
+        logging.info("Инициализирована база данных аутентификации SQLite.")
 
     def user_exists(self):
         with self.get_auth_connection() as conn:

@@ -14,6 +14,37 @@ class CustomFormatter(logging.Formatter):
         dt = datetime.fromtimestamp(record.created)
         return dt.strftime('%Y-%m-%d %H:%M:%S.%f')
 
+def flatten_config(config):
+    # Если конфиг уже плоский (нет секций), возвращаем как есть
+    if 'network' not in config:
+        return config
+
+    flat_config = {}
+    # Разворачиваем секции в плоский формат
+    sections = {
+        'network': [
+            'interface', 'server_ip', 'pool_start', 'pool_end', 'subnet_mask',
+            'gateway', 'dns_servers', 'lease_time', 'domain_name'
+        ],
+        'server': ['cache_ttl', 'expire_check_period', 'dhcp_auth_enabled', 
+                   'dhcp_auth_key', 'dhcp_auth_realm', 'forcerenew_without_auth'],
+        'web': ['web_host', 'web_port', 'web_lease_history_limit'],
+        'database': ['db_file', 'auth_db_file', 'history_db_file', 'history_cleanup_days'],
+        'logging': ['log_file', 'log_level', 'max_log_size_mb', 'max_log_backup_count'],
+        'api': ['api_cache_ttl', 'api_token'],
+        'telegram': ['telegram_enabled', 'telegram_notify_new_device', 
+                    'telegram_notify_inactive_device', 'inactive_period', 
+                    'telegram_bot_token', 'telegram_chat_id', 'telegram_thread_id', 
+                    'telegram_web_url', 'telegram_retries', 'telegram_retry_interval']
+    }
+
+    for section, keys in sections.items():
+        for key in keys:
+            if key in config.get(section, {}):
+                flat_config[key] = config[section][key]
+
+    return flat_config
+
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     config_file = os.path.join(base_dir, 'config.json')
@@ -31,6 +62,9 @@ def main():
         logging.error(f"Ошибка загрузки конфига {config_file}: {e}")
         raise
     
+    # Преобразуем конфиг в плоский формат для обратной совместимости
+    config = flatten_config(config)
+
     # Формируем абсолютные пути для файлов баз данных и логов из конфига
     config['db_file'] = os.path.join(base_dir, config.get('db_file', 'dhcp_leases.db'))
     config['auth_db_file'] = os.path.join(base_dir, config.get('auth_db_file', 'web_auth.db'))
@@ -67,7 +101,7 @@ def main():
     logger.addHandler(stream_handler)
 
     logging.info("Запуск сервера...")
-
+    
     # Инициализация
     try:
         auth_manager = AuthManager(config['auth_db_file'])
