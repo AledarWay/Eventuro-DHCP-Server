@@ -72,11 +72,7 @@
   },
   "server": {
     "cache_ttl": 30,
-    "expire_check_period": 300,
-    "dhcp_auth_enabled": false,
-    "dhcp_auth_key": "your_hex_key_here",
-    "dhcp_auth_realm": "MyDomain.local",
-    "forcerenew_without_auth": false
+    "expire_check_period": 300
   },
   "web": {
     "web_host": "0.0.0.0",
