@@ -13,10 +13,10 @@ def log_request(endpoint, request_headers, request_body, response_headers, respo
     logging.info(f"<< Получен запрос в API по {endpoint}")
     logging.info(f"<< Address: {request.url}")
     logging.info(f"<< Headers: {dict(request_headers)}")
-    logging.info(f"<< Body: {request_body}")
+    logging.debug(f"<< Body: {request_body}")
     logging.info(f">> Отправлен ответ в API по {endpoint}")
     logging.info(f">> Headers: {dict(response_headers)}")
-    logging.info(f">> Body: {response_body}")
+    logging.debug(f">> Body: {response_body}")
 
 def format_date(date_str):
     if not date_str:
