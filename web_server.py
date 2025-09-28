@@ -133,7 +133,7 @@ def create_app(server, db_manager, auth_manager):
         'CLIENT_CREATE': 'Создание клиента',
         'DECLINE': 'Отклонение IP клиентом',
         'NAK': 'Отказ клиенту в IP',
-        'LEASE_RELEASED': 'Освобождение аренды клиентом',
+        'LEASE_RELEASED': 'Освобождение аренды',
         'INFORM': 'Информационный запрос',
         'TRUST_CHANGED': 'Изменение доверенности',
     }

@@ -6,11 +6,11 @@ START=95
 STOP=01
 
 # Путь к основному скрипту Python
-PROG="/mnt/Eventuro-DHCP-Server/main.py"
+PROG="/usr/bin/Eventuro-DHCP-Server/main.py"
 # Путь к интерпретатору Python
 PYTHON="/usr/bin/python3"
 # Рабочая директория
-WORKING_DIR="/mnt/eventuro-dhcp"
+WORKING_DIR="/usr/bin/Eventuro-DHCP-Server/"
 
 start_service() {
     # Проверяем, существует ли исполняемый файл

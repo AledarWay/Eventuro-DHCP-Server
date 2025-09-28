@@ -205,17 +205,18 @@ class DBManager:
                 hostname, lease_type, db_client_id = row
                 if lease_type == 'DYNAMIC':
                     self._insert_history(mac, 'LEASE_RELEASED', ip, None, hostname or None, client_id,
-                                         f"Аренда IP {ip} освобождена клиентом",
-                                         current_time)
+                                        f"Аренда IP {ip} освобождена клиентом",
+                                        current_time)
                     cursor.execute("""
                         UPDATE leases
                         SET is_expired = 1,
                             ip = NULL,
+                            expire_at = ?,
                             updated_at = ?
                         WHERE mac = ? AND ip = ?
-                    """, (current_time, mac, ip))
+                    """, (current_time, current_time, mac, ip))
                     conn.commit()
-                    logging.info(f"Аренда помечена как истёкшая для MAC {mac}, client_id {client_id or 'не указан'}, IP {ip} (ОСВОБОЖДЕНА)")
+                    logging.info(f"Аренда помечена как истёкшая для MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
                 else:
                     logging.warning(f"RELEASE проигнорирован для статической аренды MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
             else:
