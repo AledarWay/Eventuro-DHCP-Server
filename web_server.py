@@ -87,7 +87,7 @@ def create_app(server, db_manager, auth_manager):
         'ip': 'IP-адрес',
         'hostname': 'Имя устройства',
         'created_at': 'Дата первого подключения',
-        'updated_at': 'Дата обновления аренды',
+        'updated_at': 'Дата последнего изменения',
         'expire_at': 'Дата истечения аренды',
         'time_to_expiry': 'Осталось',
         'is_expired': 'Статус аренды',
