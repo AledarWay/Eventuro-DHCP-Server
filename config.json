@@ -39,7 +39,7 @@
     "telegram_enabled": false,
     "telegram_notify_new_device": true,
     "telegram_notify_inactive_device": true,
-    "inactive_period": "7d",
+    "inactive_period": "14d",
     "telegram_bot_token": "BOT_TOKEN_HERE",
     "telegram_chat_id": "CHAT_ID_HERE",
     "telegram_thread_id": "THREAD_ID_HERE",

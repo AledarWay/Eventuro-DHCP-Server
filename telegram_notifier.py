@@ -127,6 +127,7 @@ class TelegramNotifier:
         # Экранируем статические части сообщения
         mac_label = self.escape_markdown("MAC")
         ip_label = self.escape_markdown("Выдан IP")
+        hashtag = self.escape_markdown("#СобытиеЛСМ_Сеть")
 
         # Формируем сообщение
         if is_new_device and self.notify_new:
@@ -137,17 +138,19 @@ class TelegramNotifier:
                 f"✉️ *{ip_label}*: {ip}\n"
                 f"📱 Управление: [Открыть]({web_url})\n"
                 f"🕒 *Время*: {current_time}\n"
+                f"{hashtag}"
             )
             self.send_message(message)
         elif not is_new_device and self.notify_inactive and time_diff:
             human_time = self.escape_markdown(self.to_human_time(time_diff))
             message = (
-                "🛜 Устройство подключилось после *длительного отсутствия*\n"
+                "🛜 Устройство подключилось после *длительной неактивности*\n"
                 f"🗓 Последнее подключение: *{human_time} назад*\n"
                 f"ℹ️ *Имя*: {hostname}\n"
                 f"🔌 *{mac_label}*: {mac}\n"
                 f"✉️ *{ip_label}*: {ip}\n"
                 f"📱 Управление: [Открыть]({web_url})\n"
                 f"🕒 *Время*: {current_time}\n"
+                f"{hashtag}"
             )
             self.send_message(message)

@@ -452,10 +452,12 @@ class DBManager:
                                     f"Выдана новая аренда: IP {ip} до {expire_at}",
                                     lease_time_str, change_channel=change_channel)
             
-            if create_channel != 'STATIC_LEASE':
-                self.telegram_notifier.notify(mac, ip, hostname, True)
             conn.commit()
             logging.info(f"Создана новая аренда для MAC {mac}, client_id {client_id or 'не указан'}: IP {ip}, тип {lease_type}, create_channel {create_channel}, change_channel {change_channel}")
+            
+            # Проверка на необходимость уведомления о неактивности
+            if create_channel != 'STATIC_LEASE':
+                self.telegram_notifier.notify(mac, ip, hostname, True)
         
     def update_ip(self, mac, new_ip, client_id=None, change_channel='DHCP'):
         if self.is_device_blocked(mac):
@@ -484,12 +486,7 @@ class DBManager:
             new_is_expired = 0
             if lease_type == 'DYNAMIC':
                 new_expire_at = (datetime.now() + timedelta(seconds=self.config['lease_time'])).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                # if is_expired == 1:
-                #     self._insert_history(mac, 'LEASE_RENEWED', old_ip, new_ip, hostname or None, client_id or old_client_id,
-                #                         f"Аренда IP {new_ip} возобновлена до {new_expire_at}",
-                #                         current_time_str, change_channel=change_channel)
-                #     logging.info(f"Аренда возобновлена для MAC {mac}, IP {new_ip}")
-            
+                
             cursor.execute("""
                 UPDATE leases
                 SET ip = ?,
@@ -509,8 +506,15 @@ class DBManager:
                 description = f"Выдана новая аренда: IP {new_ip}"
                 self._insert_history(mac, 'LEASE_ISSUED', old_ip, new_ip, hostname or None, client_id or old_client_id,
                                     description, history_time_str, change_channel=change_channel)
+                
             conn.commit()
             logging.info(f"Обновлён IP для MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: {old_ip} -> {new_ip}, is_expired сброшен на {new_is_expired}, change_channel {change_channel}")
+
+            # Проверка на необходимость уведомления о неактивности
+            if lease_type == 'DYNAMIC':
+                time_diff = self._get_time_diff(mac)
+                if time_diff is not None:
+                    self.telegram_notifier.notify(mac, new_ip, hostname, False, time_diff)
     
     def update_hostname(self, mac, hostname, client_id=None, change_channel='DHCP'):
         if self.is_device_blocked(mac):
@@ -579,13 +583,13 @@ class DBManager:
                                 f"Аренда IP {ip} продлена до {new_expire_at}",
                                 current_time_str, change_channel=change_channel)
             
-            # Проверка time_diff для уведомления
+            conn.commit()
+            logging.info(f"Аренда продлена для MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: IP {ip} до {new_expire_at}, change_channel {change_channel}")
+
+            # Проверка на необходимость уведомления о неактивности
             time_diff = self._get_time_diff(mac)
             if time_diff is not None:
                 self.telegram_notifier.notify(mac, ip, hostname, False, time_diff)
-            
-            conn.commit()
-            logging.info(f"Аренда продлена для MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: IP {ip} до {new_expire_at}, change_channel {change_channel}")
 
     def update_lease_type(self, mac, lease_type, client_id=None, change_channel='DHCP'):
         if self.is_device_blocked(mac):
@@ -621,12 +625,15 @@ class DBManager:
             description = f"Назначен статический IP: {ip}" if lease_type == 'STATIC' else f"Выдана новая аренда: IP {ip} до {expire_at}"
             self._insert_history(mac, action, ip, ip, hostname or None, client_id or old_client_id,
                                 description, current_time_str, change_channel=change_channel)
+            
+            conn.commit()
+            logging.info(f"Обновлён тип аренды для MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: {old_lease_type} -> {lease_type}, change_channel {change_channel}")
+
+            # Проверка на необходимость уведомления о неактивности
             if lease_type == 'DYNAMIC':
                 time_diff = self._get_time_diff(mac)
                 if time_diff is not None:
                     self.telegram_notifier.notify(mac, ip, hostname, False, time_diff)
-            conn.commit()
-            logging.info(f"Обновлён тип аренды для MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: {old_lease_type} -> {lease_type}, change_channel {change_channel}")
     
     def decline_lease(self, mac, ip, client_id=None, pool_start_int=None, pool_end_int=None):
         if self.is_device_blocked(mac):
