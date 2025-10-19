@@ -9,6 +9,38 @@ from db_manager import DBManager, AuthManager
 from telegram_notifier import TelegramNotifier
 from web_server import create_app, validate_config
 
+class CustomRotatingFileHandler(RotatingFileHandler):
+    def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None, delay=False):
+        super().__init__(filename, mode, maxBytes, backupCount, encoding, delay)
+        self.baseFilenameWithoutExt = filename.rsplit('.', 1)[0]  # Удаляем расширение .log
+
+    def doRollover(self):
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+
+        # Получаем текущую дату в формате YYYYMMDD_HHMMSS
+        current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        # Если backupCount > 0, переименовываем существующие файлы
+        if self.backupCount > 0:
+            for i in range(self.backupCount - 1, 0, -1):
+                sfn = f"{self.baseFilenameWithoutExt}_{i}_*.log"
+                dfn = f"{self.baseFilenameWithoutExt}_{i + 1}_{current_time}.log"
+                for old_file in self.getFilesToDelete(sfn):
+                    self.rename(old_file, dfn)
+
+            # Переименовываем текущий файл лога
+            dfn = f"{self.baseFilenameWithoutExt}_1_{current_time}.log"
+            self.rotate(self.baseFilename, dfn)
+
+        if not self.delay:
+            self.stream = self._open()
+
+    def getFilesToDelete(self, pattern):
+        import glob
+        return glob.glob(pattern)
+
 class CustomFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
         dt = datetime.fromtimestamp(record.created)
@@ -80,7 +112,7 @@ def main():
     formatter = CustomFormatter(
         fmt='%(asctime)s [%(levelname)s] [%(name)s] {%(funcName)s}: %(message)s'
     )
-    file_handler = RotatingFileHandler(
+    file_handler = CustomRotatingFileHandler(
         config['log_file'],
         mode='a',
         maxBytes=config['max_log_size_mb']*1024*1024,
