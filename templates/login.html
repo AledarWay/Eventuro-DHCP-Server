@@ -128,18 +128,22 @@
 
         // Применение сохранённой темы при загрузке страницы
         window.onload = function() {
-            const savedTheme = localStorage.getItem('theme');
-            const body = document.body;
-            const loginContainer = document.querySelector('.login-container');
-            const themeIcon = document.getElementById('theme-icon');
-            if (savedTheme === 'dark') {
-                body.classList.add('dark-theme');
-                loginContainer.classList.add('dark-theme');
-                themeIcon.textContent = '☀️';
-            } else {
-                themeIcon.textContent = '🌙';
-            }
-        };
+		const savedTheme = localStorage.getItem('theme');
+		const body = document.body;
+		const loginContainer = document.querySelector('.login-container');
+		const themeIcon = document.getElementById('theme-icon');
+		
+		const isDark = savedTheme === 'dark' || savedTheme === null;
+
+		if (isDark) {
+			body.classList.add('dark-theme');
+			loginContainer.classList.add('dark-theme');
+			themeIcon.textContent = '☀️';
+			localStorage.setItem('theme', 'dark'); // сохраняем как тёмную по умолчанию
+		} else {
+			themeIcon.textContent = '🌙';
+		}
+};
     </script>
 </body>
 </html>
