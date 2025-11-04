@@ -28,12 +28,12 @@ class CustomRotatingFileHandler(RotatingFileHandler):
                 sfn = f"{self.baseFilenameWithoutExt}_{i}_*.log"
                 dfn = f"{self.baseFilenameWithoutExt}_{i + 1}_{current_time}.log"
                 for old_file in self.getFilesToDelete(sfn):
-                    self.rename(old_file, dfn)
+                    os.rename(old_file, dfn)
 
             # Переименовываем текущий файл лога
             dfn = f"{self.baseFilenameWithoutExt}_1_{current_time}.log"
             self.rotate(self.baseFilename, dfn)
-
+        
         if not self.delay:
             self.stream = self._open()
 
