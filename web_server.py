@@ -810,11 +810,11 @@ def create_app(server, db_manager, auth_manager):
                 'updated_at': format_date(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')),
                 'expire_at': None,
                 'time_to_expiry': 'Бессрочная',
-                'is_expired': False,
+                'is_expired': 0,
                 'lease_type': 'STATIC',
-                'is_blocked': False,
-                'is_custom_hostname': False,
-                'trust_flag': True,  # Роутер всегда доверенный
+                'is_blocked': 0,
+                'is_custom_hostname': 0,
+                'trust_flag': 1,  # Роутер всегда доверенный
                 'is_cached': False
             }
             # Логируем запрос и ответ
