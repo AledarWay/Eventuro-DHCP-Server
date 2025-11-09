@@ -798,6 +798,35 @@ def create_app(server, db_manager, auth_manager):
             )
             return jsonify(response), 401
 
+        # Проверка, является ли запрошенный IP адресом роутера
+        router_ip = server.config.get('server_ip')  # Берем IP роутера из конфига
+        if ip == router_ip:
+            response = {
+                'mac': '00:00:00:00:00:00',  # Фиктивный MAC для роутера
+                'ip': ip,
+                'hostname': 'Gateway',
+                'client_id': None,
+                'created_at': format_date(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')),
+                'updated_at': format_date(datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')),
+                'expire_at': None,
+                'time_to_expiry': 'Бессрочная',
+                'is_expired': False,
+                'lease_type': 'STATIC',
+                'is_blocked': False,
+                'is_custom_hostname': False,
+                'trust_flag': True,  # Роутер всегда доверенный
+                'is_cached': False
+            }
+            # Логируем запрос и ответ
+            log_request(
+                endpoint=f"/api/client/{ip}",
+                request_headers=request.headers,
+                request_body=request.get_data(as_text=True) or "No body",
+                response_headers={'Content-Type': 'application/json'},
+                response_body=response
+            )
+            return jsonify(response), 200
+
         # Очищаем устаревшие записи в кэше
         clean_cache()
 
