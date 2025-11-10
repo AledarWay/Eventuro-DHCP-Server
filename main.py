@@ -12,28 +12,21 @@ from web_server import create_app, validate_config
 class CustomRotatingFileHandler(RotatingFileHandler):
     def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None, delay=False):
         super().__init__(filename, mode, maxBytes, backupCount, encoding, delay)
-        self.baseFilenameWithoutExt = filename.rsplit('.', 1)[0]  # Удаляем расширение .log
+        self.baseFilenameWithoutExt = filename.rsplit('.', 1)[0]
 
     def doRollover(self):
         if self.stream:
             self.stream.close()
             self.stream = None
-
-        # Получаем текущую дату в формате YYYYMMDD_HHMMSS
         current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-        # Если backupCount > 0, переименовываем существующие файлы
         if self.backupCount > 0:
             for i in range(self.backupCount - 1, 0, -1):
                 sfn = f"{self.baseFilenameWithoutExt}_{i}_*.log"
                 dfn = f"{self.baseFilenameWithoutExt}_{i + 1}_{current_time}.log"
                 for old_file in self.getFilesToDelete(sfn):
                     os.rename(old_file, dfn)
-
-            # Переименовываем текущий файл лога
             dfn = f"{self.baseFilenameWithoutExt}_1_{current_time}.log"
             self.rotate(self.baseFilename, dfn)
-        
         if not self.delay:
             self.stream = self._open()
 
@@ -47,12 +40,7 @@ class CustomFormatter(logging.Formatter):
         return dt.strftime('%Y-%m-%d %H:%M:%S.%f')
 
 def flatten_config(config):
-    # Если конфиг уже плоский (нет секций), возвращаем как есть
-    if 'network' not in config:
-        return config
-
     flat_config = {}
-    # Разворачиваем секции в плоский формат
     sections = {
         'network': [
             'interface', 'server_ip', 'pool_start', 'pool_end', 'subnet_mask',
@@ -66,13 +54,15 @@ def flatten_config(config):
         'telegram': ['telegram_enabled', 'telegram_notify_new_device', 
                     'telegram_notify_inactive_device', 'inactive_period', 
                     'telegram_bot_token', 'telegram_chat_id', 'telegram_thread_id', 
-                    'telegram_web_url', 'telegram_retries', 'telegram_retry_interval']
+                    'telegram_web_url', 'telegram_retries', 'telegram_retry_interval'],
+        'influxdb': ['metrics_enabled', 'url', 'token', 'org', 'bucket', 'measurement', 'metrics_interval']
     }
 
     for section, keys in sections.items():
         for key in keys:
             if key in config.get(section, {}):
                 flat_config[key] = config[section][key]
+        flat_config[section] = config.get(section, {})
 
     return flat_config
 
@@ -93,22 +83,18 @@ def main():
         logging.error(f"Ошибка загрузки конфига {config_file}: {e}")
         raise
     
-    # Преобразуем конфиг в плоский формат для обратной совместимости
     config = flatten_config(config)
 
-    # Формируем абсолютные пути для файлов баз данных и логов из конфига
     config['db_file'] = os.path.join(base_dir, config.get('db_file', 'dhcp_leases.db'))
     config['auth_db_file'] = os.path.join(base_dir, config.get('auth_db_file', 'web_auth.db'))
     config['history_db_file'] = os.path.join(base_dir, config.get('history_db_file', 'dhcp_lease_history.db'))
     config['log_file'] = os.path.join(base_dir, config.get('log_file', 'dhcp_server.log'))
 
-    # Валидация конфига
     is_valid, error = validate_config(config)
     if not is_valid:
         logging.error(f"Невалидный конфиг: {error}")
         raise ValueError(f"Невалидный конфиг: {error}")
 
-    # Настройка логирования
     formatter = CustomFormatter(
         fmt='%(asctime)s [%(levelname)s] [%(name)s] {%(funcName)s}: %(message)s'
     )
@@ -133,7 +119,6 @@ def main():
 
     logging.info("Запуск сервера...")
     
-    # Инициализация
     try:
         auth_manager = AuthManager(config['auth_db_file'])
         db_manager = DBManager(config['db_file'], config['history_db_file'], config, None)
@@ -142,12 +127,15 @@ def main():
         server = DHCPServer(config, db_manager)
         server.start()
 
-        # Запуск веб-сервера
         app = create_app(server, db_manager, auth_manager)
         app.run(host=config['web_host'], port=config['web_port'], debug=False)
 
+    except KeyboardInterrupt:
+        logging.info("Получен сигнал прерывания, завершаем работу...")
+        server.stop()
     except Exception as e:
         logging.error(f"Критическая ошибка: {e}")
+        server.stop()
         logging.info("Перезапуск через 5 секунд...")
         time.sleep(5)
         main()

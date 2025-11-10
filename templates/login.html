@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Авторизация - Консоль DHCP-сервера</title>
-    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
     <style>
         body {
-            background-image: url('/static/login_background.jpg');
+            background-image: url('{{ url_for('static', filename='login_background.jpg') }}');
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
@@ -78,7 +78,7 @@
     </style>
 </head>
 <body>
-    <div class="theme-toggle" onclick="toggleTheme()">
+    <div class="theme-toggle" id="theme-toggle">
         <span id="theme-icon">☀️</span>
     </div>
     <div class="login-container">
@@ -114,36 +114,7 @@
     <footer class="footer-authorship">
         <small>© 2025 Eventuro, DHCP Server</small>
     </footer>
-    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-    <script>
-        function toggleTheme() {
-            const body = document.body;
-            const loginContainer = document.querySelector('.login-container');
-            const themeIcon = document.getElementById('theme-icon');
-            const isDark = body.classList.toggle('dark-theme');
-            loginContainer.classList.toggle('dark-theme');
-            themeIcon.textContent = isDark ? '☀️' : '🌙';
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        }
-
-        // Применение сохранённой темы при загрузке страницы
-        window.onload = function() {
-		const savedTheme = localStorage.getItem('theme');
-		const body = document.body;
-		const loginContainer = document.querySelector('.login-container');
-		const themeIcon = document.getElementById('theme-icon');
-		
-		const isDark = savedTheme === 'dark' || savedTheme === null;
-
-		if (isDark) {
-			body.classList.add('dark-theme');
-			loginContainer.classList.add('dark-theme');
-			themeIcon.textContent = '☀️';
-			localStorage.setItem('theme', 'dark'); // сохраняем как тёмную по умолчанию
-		} else {
-			themeIcon.textContent = '🌙';
-		}
-};
-    </script>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
 </body>
 </html>

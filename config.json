@@ -47,4 +47,13 @@
     "telegram_retries": 3,
     "telegram_retry_interval": 5
   }
+  "influxdb": {
+    "metrics_enabled": false,
+    "url": "http://192.168.1.1:8087",
+    "token": "influxdb-token-here",
+    "org": "OrgName",
+    "bucket": "BucketName",
+    "measurement": "metrics_name",
+    "metrics_interval": 5
+  }
 }

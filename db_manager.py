@@ -219,6 +219,9 @@ class DBManager:
                     logging.info(f"Аренда помечена как истёкшая для MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
                 else:
                     logging.warning(f"RELEASE проигнорирован для статической аренды MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
+                    self._insert_history(mac, 'LEASE_RELEASED', ip, None, hostname or None, client_id,
+                                        f"Освобождение статического IP {ip} проигнорировано",
+                                        current_time)
             else:
                 logging.warning(f"RELEASE проигнорирован, клиент не найден с MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
 
@@ -371,7 +374,7 @@ class DBManager:
         for ip_int in range(pool_start_int, pool_end_int + 1):
             if ip_int not in used_ips:
                 ip = self.int_to_ip(ip_int)
-                logging.debug(f"Найден свободный IP: {ip}")
+                logging.info(f"Найден свободный IP: {ip}")
                 return ip
         logging.error(f"Нет свободных IP в пуле {self.int_to_ip(pool_start_int)}-{self.int_to_ip(pool_end_int)}")
         return None
@@ -455,9 +458,9 @@ class DBManager:
             conn.commit()
             logging.info(f"Создана новая аренда для MAC {mac}, client_id {client_id or 'не указан'}: IP {ip}, тип {lease_type}, create_channel {create_channel}, change_channel {change_channel}")
             
-            # Проверка на необходимость уведомления о неактивности
+            # Отправка уведомления о новом устройстве
             if create_channel != 'STATIC_LEASE':
-                self.telegram_notifier.notify(mac, ip, hostname, True)
+                self.telegram_notifier.notify(mac, ip, hostname, is_new_device=True)
         
     def update_ip(self, mac, new_ip, client_id=None, change_channel='DHCP'):
         if self.is_device_blocked(mac):
@@ -484,8 +487,10 @@ class DBManager:
             
             new_expire_at = None
             new_is_expired = 0
+            time_diff = None
             if lease_type == 'DYNAMIC':
                 new_expire_at = (datetime.now() + timedelta(seconds=self.config['lease_time'])).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                time_diff = self._get_time_diff(mac)
                 
             cursor.execute("""
                 UPDATE leases
@@ -509,12 +514,9 @@ class DBManager:
                 
             conn.commit()
             logging.info(f"Обновлён IP для MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: {old_ip} -> {new_ip}, is_expired сброшен на {new_is_expired}, change_channel {change_channel}")
-
-            # Проверка на необходимость уведомления о неактивности
-            if lease_type == 'DYNAMIC':
-                time_diff = self._get_time_diff(mac)
-                if time_diff is not None:
-                    self.telegram_notifier.notify(mac, new_ip, hostname, False, time_diff)
+            
+            if time_diff is not None:
+                self.telegram_notifier.notify(mac, new_ip, hostname, False, time_diff)
     
     def update_hostname(self, mac, hostname, client_id=None, change_channel='DHCP'):
         if self.is_device_blocked(mac):
@@ -568,9 +570,16 @@ class DBManager:
                 logging.error(f"Аренда для MAC {mac} не найдена")
                 return
             ip, hostname, lease_type, old_client_id, old_expire_at = row
+
             if lease_type != 'DYNAMIC':
-                logging.debug(f"Продление проигнорировано для статической аренды MAC {mac}")
+                logging.info(f"Продление аренды проигнорировано для статической аренды MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: IP {ip}")
+                self._insert_history(mac, 'LEASE_RENEWED', ip, None, hostname or None, client_id or old_client_id,
+                                f"Статический IP {ip} выдан клиенту бессрочно",
+                                current_time_str, change_channel=change_channel)
                 return
+            
+            time_diff = self._get_time_diff(mac)
+
             new_expire_at = (datetime.now() + timedelta(seconds=self.config['lease_time'])).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             cursor.execute("""
                 UPDATE leases
@@ -586,8 +595,6 @@ class DBManager:
             conn.commit()
             logging.info(f"Аренда продлена для MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: IP {ip} до {new_expire_at}, change_channel {change_channel}")
 
-            # Проверка на необходимость уведомления о неактивности
-            time_diff = self._get_time_diff(mac)
             if time_diff is not None:
                 self.telegram_notifier.notify(mac, ip, hostname, False, time_diff)
 
@@ -628,12 +635,6 @@ class DBManager:
             
             conn.commit()
             logging.info(f"Обновлён тип аренды для MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: {old_lease_type} -> {lease_type}, change_channel {change_channel}")
-
-            # Проверка на необходимость уведомления о неактивности
-            if lease_type == 'DYNAMIC':
-                time_diff = self._get_time_diff(mac)
-                if time_diff is not None:
-                    self.telegram_notifier.notify(mac, ip, hostname, False, time_diff)
     
     def decline_lease(self, mac, ip, client_id=None, pool_start_int=None, pool_end_int=None):
         if self.is_device_blocked(mac):
@@ -714,11 +715,14 @@ class DBManager:
 
     def _get_time_diff(self, mac):
         last_activity_time = self.get_last_activity_time(mac)
+        logging.info(f"Последняя активность для MAC {mac}: {last_activity_time}")
         if last_activity_time:
             time_diff = datetime.now() - last_activity_time
             if time_diff < self.telegram_notifier.inactive_period:
+                logging.info(f"Интервал {time_diff} меньше установленного периода неактивности {self.telegram_notifier.inactive_period}")
                 return None
             return time_diff
+        logging.info(f"Нет данных о последней активности для MAC {mac}")
         return None
 
     def get_lease_type(self, mac):

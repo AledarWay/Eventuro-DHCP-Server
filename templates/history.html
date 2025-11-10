@@ -6,8 +6,8 @@
     <title>История изменений DHCP</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='bootstrap-icons.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/bootstrap-icons.css') }}" rel="stylesheet">
     <style>
         body {
             background-color: #f0f2f5;
@@ -263,7 +263,6 @@
                 </form>
             </div>
         </div>
-
         <h3 class="mb-2">Фильтры истории:</h3>
         <form method="GET" class="mb-3" id="filter-form">
             <div class="row g-3">
@@ -300,7 +299,6 @@
             <input type="hidden" name="sort_order" id="sort_order" value="{{ sort_order }}">
             <input type="hidden" name="per_page" id="per_page_hidden" value="{{ per_page }}">
         </form>
-
         <div class="table-responsive">
             <table class="table table-striped history-table">
                 <thead>
@@ -347,12 +345,11 @@
                 </tbody>
             </table>
         </div>
-
         <div class="mt-3 pagination-wrapper">
             <div class="d-flex justify-content-between align-items-center flex-column flex-sm-row per-page-container">
                 <div class="d-flex align-items-center gap-2 mb-2 mb-sm-0">
                     <label for="per_page" class="form-label mb-0">Записей на странице:</label>
-                    <select name="per_page" id="per_page" class="form-select" style="width: auto;" onchange="updatePerPage(this.value)">
+                    <select name="per_page" id="per_page" class="form-select" style="width: auto;">
                         {% for option in [5, 10, 20, 50] %}
                             <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                         {% endfor %}
@@ -360,40 +357,30 @@
                 </div>
                 <nav aria-label="Пагинация истории">
                     <ul class="pagination justify-content-center mb-0">
-                        <!-- Кнопка "Предыдущая" -->
                         <li class="page-item {% if page == 1 %}disabled{% endif %}">
                             <a class="page-link" href="{{ url_for('history', page=page-1, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}" aria-label="Предыдущая">
                                 <span aria-hidden="true">&laquo;</span>
                             </a>
                         </li>
-                        
-                        <!-- Сокращенная пагинация -->
                         {% set total_pages = total_pages|int %}
                         {% set current_page = page|int %}
-                        
                         {% if total_pages <= 5 %}
-                            {# Если страниц мало, показываем все #}
                             {% for p in range(1, total_pages + 1) %}
                                 <li class="page-item {% if p == current_page %}active{% endif %}">
                                     <a class="page-link" href="{{ url_for('history', page=p, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
                                 </li>
                             {% endfor %}
                         {% else %}
-                            {# Показываем первые 2 страницы #}
                             {% for p in range(1, 3) %}
                                 <li class="page-item {% if p == current_page %}active{% endif %}">
                                     <a class="page-link" href="{{ url_for('history', page=p, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
                                 </li>
                             {% endfor %}
-                            
-                            {# Показываем многоточие, если текущая страница далеко от начала #}
                             {% if current_page > 4 %}
                                 <li class="page-item disabled">
                                     <span class="page-link">...</span>
                                 </li>
                             {% endif %}
-                            
-                            {# Показываем страницы вокруг текущей #}
                             {% for p in range(max(1, current_page - 2), min(total_pages + 1, current_page + 3)) %}
                                 {% if p > 2 and p < total_pages - 1 %}
                                     <li class="page-item {% if p == current_page %}active{% endif %}">
@@ -401,23 +388,17 @@
                                     </li>
                                 {% endif %}
                             {% endfor %}
-                            
-                            {# Показываем многоточие, если текущая страница далеко от конца #}
                             {% if current_page < total_pages - 3 %}
                                 <li class="page-item disabled">
                                     <span class="page-link">...</span>
                                 </li>
                             {% endif %}
-                            
-                            {# Показываем последние 2 страницы #}
                             {% for p in range(max(total_pages - 1, 3), total_pages + 1) %}
                                 <li class="page-item {% if p == current_page %}active{% endif %}">
                                     <a class="page-link" href="{{ url_for('history', page=p, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
                                 </li>
                             {% endfor %}
                         {% endif %}
-                        
-                        <!-- Кнопка "Следующая" -->
                         <li class="page-item {% if page == total_pages %}disabled{% endif %}">
                             <a class="page-link" href="{{ url_for('history', page=page+1, per_page=per_page, mac=mac_filter, action=action_filter, timestamp=timestamp_filter, sort_by=sort_by, sort_order=sort_order) }}" aria-label="Следующая">
                                 <span aria-hidden="true">&raquo;</span>
@@ -432,134 +413,7 @@
     <footer class="mt-4 text-center">
         <small class="text-dark">© 2025 Eventuro, DHCP Server</small>
     </footer>
-    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-    <script>
-		function updatePerPage(value) {
-			// Сохраняем в localStorage
-			localStorage.setItem('historyPerPage', value);
-			
-			// Обновляем скрытое поле
-			document.getElementById('per_page_hidden').value = value;
-			
-			// Отправляем форму с новым значением
-			document.getElementById('filter-form').submit();
-		}
-
-		document.addEventListener('DOMContentLoaded', () => {
-			const themeToggle = document.getElementById('theme-toggle');
-			const currentTheme = localStorage.getItem('theme') || 'light';
-			document.documentElement.setAttribute('data-bs-theme', currentTheme);
-			themeToggle.textContent = currentTheme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-
-			themeToggle.addEventListener('click', () => {
-				const newTheme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-				document.documentElement.setAttribute('data-bs-theme', newTheme);
-				localStorage.setItem('theme', newTheme);
-				themeToggle.textContent = newTheme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-			});
-
-			document.querySelectorAll('.sort-link').forEach(link => {
-				link.addEventListener('click', (e) => {
-					e.preventDefault();
-					const sortBy = link.getAttribute('data-sort-by');
-					const sortOrder = link.getAttribute('data-sort-order');
-					document.getElementById('sort_by').value = sortBy;
-					document.getElementById('sort_order').value = sortOrder;
-					document.getElementById('filter-form').submit();
-				});
-			});
-
-			const resizers = document.querySelectorAll('.th-resize-handle');
-			let currentResizer, startX, startWidth, thElement;
-
-			resizers.forEach(resizer => {
-				resizer.addEventListener('mousedown', (e) => {
-					e.preventDefault();
-					currentResizer = resizer;
-					thElement = resizer.parentElement;
-					startX = e.pageX;
-					startWidth = thElement.getBoundingClientRect().width;
-					currentResizer.classList.add('active');
-					document.addEventListener('mousemove', resize);
-					document.addEventListener('mouseup', stopResize);
-				});
-			});
-
-			function resize(e) {
-				if (currentResizer) {
-					const newWidth = startWidth + (e.pageX - startX);
-					if (newWidth >= 50 && newWidth <= 500) {
-						thElement.style.width = `${newWidth}px`;
-						thElement.style.minWidth = `${newWidth}px`;
-						const colIndex = Array.from(thElement.parentElement.children).indexOf(thElement);
-						localStorage.setItem(`historyColumnWidth_${colIndex}`, newWidth);
-					}
-				}
-			}
-
-			function stopResize() {
-				if (currentResizer) {
-					currentResizer.classList.remove('active');
-					currentResizer = null;
-					document.removeEventListener('mousemove', resize);
-					document.removeEventListener('mouseup', stopResize);
-				}
-			}
-
-			document.querySelectorAll('.history-table th').forEach((th, index) => {
-				const savedWidth = localStorage.getItem(`historyColumnWidth_${index}`);
-				if (savedWidth) {
-					th.style.width = `${savedWidth}px`;
-					th.style.minWidth = `${savedWidth}px`;
-				}
-			});
-
-			// Логика для переключения между select и input для MAC-адреса
-			const macSelect = document.getElementById('mac-select');
-			const macInput = document.getElementById('mac-input');
-			macSelect.addEventListener('change', () => {
-				if (macSelect.value === 'manual') {
-					macInput.style.display = 'block';
-					macInput.name = 'mac';
-					macSelect.name = '';
-				} else {
-					macInput.style.display = 'none';
-					macInput.name = '';
-					macSelect.name = 'mac';
-				}
-			});
-
-			// Инициализация состояния при загрузке
-			if (macSelect.value === 'manual') {
-				macInput.style.display = 'block';
-				macInput.name = 'mac';
-				macSelect.name = '';
-			} else {
-				macInput.style.display = 'none';
-				macInput.name = '';
-				macSelect.name = 'mac';
-			}
-
-			// Автоматическое восстановление per_page при загрузке страницы
-			const savedPerPage = localStorage.getItem('historyPerPage');
-			const currentPerPage = {{ per_page }};
-			const perPageSelect = document.getElementById('per_page');
-			const perPageHidden = document.getElementById('per_page_hidden');
-			
-			if (savedPerPage && parseInt(savedPerPage) !== currentPerPage) {
-				// Если сохраненное значение отличается от текущего, обновляем select и отправляем форму
-				perPageSelect.value = savedPerPage;
-				perPageHidden.value = savedPerPage;
-				// Добавляем небольшую задержку, чтобы избежать конфликта с загрузкой страницы
-				setTimeout(() => {
-					document.getElementById('filter-form').submit();
-				}, 100);
-			} else if (savedPerPage) {
-				// Если значение совпадает, просто обновляем select
-				perPageSelect.value = savedPerPage;
-				perPageHidden.value = savedPerPage;
-			}
-		});
-	</script>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/history.js') }}"></script>
 </body>
 </html>

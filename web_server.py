@@ -1,4 +1,5 @@
 from flask import Flask, request, render_template, redirect, url_for, jsonify, flash, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import logging
 import re
@@ -7,7 +8,6 @@ import struct
 import math
 import os
 from datetime import datetime
-from werkzeug.security import generate_password_hash, check_password_hash
 
 def log_request(endpoint, request_headers, request_body, response_headers, response_body):
     logging.info(f"<< Получен запрос в API по {endpoint}")
@@ -205,6 +205,8 @@ def create_app(server, db_manager, auth_manager):
         if sort_by not in valid_columns:
             sort_by = 'ip'
 
+        subnet_string = get_subnet_string(server.config['server_ip'], server.config['subnet_mask'])
+
         with db_manager.get_connection() as conn:
             cursor = conn.cursor()
             query = "SELECT id, mac, ip, hostname, created_at, updated_at, expire_at, is_expired, lease_type, is_blocked, client_id, create_channel, is_custom_hostname, trust_flag FROM leases WHERE deleted_at IS NULL"
@@ -225,7 +227,6 @@ def create_app(server, db_manager, auth_manager):
                 query += " AND is_expired = ?"
                 params.append(1 if status_filter == 'EXPIRED' else 0)
 
-            # Базовая сортировка по умолчанию
             if sort_by != 'ip':
                 query += f" ORDER BY {sort_by} {sort_order.upper()}"
 
@@ -238,13 +239,12 @@ def create_app(server, db_manager, auth_manager):
                     ip = row[columns.index('ip')]
                     if ip:
                         try:
-                            # Преобразуем IP в кортеж чисел для правильной сортировки
                             parts = ip.split('.')
                             if len(parts) == 4:
                                 return tuple(int(part) for part in parts)
                         except ValueError:
                             pass
-                    return (0, 0, 0, 0)  # Для NULL или некорректных IP
+                    return (0, 0, 0, 0)
             
                 if sort_order == 'asc':
                     all_rows.sort(key=ip_sort_key)
@@ -311,7 +311,6 @@ def create_app(server, db_manager, auth_manager):
                     })
                 lease_histories.append(formatted_history)
 
-            # Сохраняем per_page в сессию для следующего запроса
             session['index_per_page'] = str(per_page)
 
             return render_template('index.html', 
@@ -335,6 +334,7 @@ def create_app(server, db_manager, auth_manager):
                                 sort_by=sort_by,
                                 sort_order=sort_order,
                                 config=server.config,
+                                subnet_string=subnet_string,
                                 stats={
                                     'occupied': occupied,
                                     'free': free,
@@ -954,6 +954,23 @@ def create_app(server, db_manager, auth_manager):
         )
 
         return jsonify(response)
+    
+    @app.route('/api/get_free_ip', methods=['GET'])
+    @login_required
+    def get_free_ip():
+        try:
+            with db_manager.get_connection() as conn:
+                cursor = conn.cursor()
+                pool_start_int = ip_to_int(server.config['pool_start'])
+                pool_end_int = ip_to_int(server.config['pool_end'])
+                free_ip = db_manager._get_new_dynamic_ip(cursor, pool_start_int, pool_end_int)
+                if free_ip:
+                    return jsonify({'ip': free_ip}), 200
+                else:
+                    return jsonify({'error': 'Нет свободных IP-адресов в пуле'}), 400
+        except Exception as e:
+            logging.error(f"Ошибка при получении свободного IP: {e}")
+            return jsonify({'error': 'Произошла ошибка при получении свободного IP'}), 500
 
     return app
 
@@ -1018,3 +1035,15 @@ def get_subnet_range(subnet_base, mask):
     start_ip_int = network_int + 2  # x.x.x.2
     end_ip_int = network_int | (~mask_int & 0xFFFFFFFF) - 1  # x.x.x.254
     return start_ip_int, end_ip_int
+
+def get_subnet_string(server_ip, subnet_mask):
+    ip_parts = server_ip.split('.')
+    mask_parts = subnet_mask.split('.')
+    subnet = []
+    for i in range(3):  # Первые три октета
+        if mask_parts[i] == '255':
+            subnet.append(ip_parts[i])
+        else:
+            subnet.append('x')
+    subnet.append('x')  # Последний октет всегда 'x'
+    return '.'.join(subnet)

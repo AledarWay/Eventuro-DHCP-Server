@@ -7,6 +7,7 @@ import netifaces
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
+from influxdb import InfluxDBService
 
 class DHCPServer:
     def __init__(self, config, db_manager):
@@ -15,6 +16,7 @@ class DHCPServer:
         self.stop_event = threading.Event()
         self.thread = None
         self.lease_check_thread = None
+        self.metrics_thread = None  # Поток для отправки метрик
         self.pool_start_int = self.ip_to_int(config['pool_start'])
         self.pool_end_int = self.ip_to_int(config['pool_end'])
         self.interface = config.get('interface', None)
@@ -22,6 +24,8 @@ class DHCPServer:
         self.request_cache = {}  # Кэш для DHCPREQUEST: { (xid, mac, requested_ip): { 'packet': bytes, 'expire_at': datetime } }
         self.inform_cache = {}  # Кэш для DHCPINFORM: { (xid, mac, ciaddr): { 'packet': bytes, 'expire_at': datetime } }
         self.cache_ttl = config.get('cache_ttl', 30)  # TTL кэша в секундах
+        self.metrics = defaultdict(int)  # Счётчик для каждого типа сообщения
+        self.influxdb = InfluxDBService(config)  # Инициализация InfluxDB
         logging.info("DHCP-сервер инициализирован с конфигурацией: %s", config)
 
     @staticmethod
@@ -58,7 +62,6 @@ class DHCPServer:
         
         with self.db_manager.get_connection() as conn:
             cursor = conn.cursor()
-            
             cursor.execute("""
                 SELECT ip, lease_type, hostname, client_id, deleted_at
                 FROM leases
@@ -68,8 +71,6 @@ class DHCPServer:
             
             if row:
                 old_ip, old_lease_type, old_hostname, old_client_id, deleted_at = row
-                
-                # Если запись была удалена, восстанавливаем её и выдаём новую аренду
                 if deleted_at is not None:
                     logging.info(f"Восстановление удаленной записи для MAC {mac}")
                     cursor.execute("""
@@ -77,7 +78,6 @@ class DHCPServer:
                         SET deleted_at = NULL
                         WHERE mac = ?
                     """, (mac,))
-                    
                     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
                     self.db_manager._insert_history(
                         mac=mac,
@@ -94,7 +94,6 @@ class DHCPServer:
                     self.db_manager.update_ip(mac, ip, client_id, change_channel='DHCP')
                     return
                 else:
-                    # Обычное обновление активной записи
                     if ip == old_ip and lease_type == old_lease_type:
                         self.db_manager.renew_lease(mac, client_id, change_channel='DHCP')
                         if hostname and hostname != old_hostname:
@@ -109,9 +108,8 @@ class DHCPServer:
                         if lease_type and lease_type != old_lease_type:
                             self.db_manager.update_lease_type(mac, lease_type, client_id, change_channel='DHCP')
             else:
-                # Создаем новую запись
                 self.db_manager.create_lease(mac, ip, hostname, lease_type or 'DYNAMIC', client_id, 
-                                        create_channel='DHCP_REQUEST', change_channel='DHCP')
+                                            create_channel='DHCP_REQUEST', change_channel='DHCP')
             
             conn.commit()
         
@@ -155,6 +153,18 @@ class DHCPServer:
             except Exception as e:
                 logging.error(f"Ошибка в периодической проверке срока аренд: {e}")
                 time.sleep(60)
+
+    def periodic_metrics_flush(self):
+        """Фоновый поток для отправки метрик в InfluxDB"""
+        while not self.stop_event.is_set():
+            try:
+                if self.metrics:
+                    self.influxdb.write_dhcp_metrics(self.metrics)
+                    self.metrics.clear()
+                time.sleep(self.influxdb.metrics_interval)
+            except Exception as e:
+                logging.error(f"Ошибка в отправке метрик в InfluxDB: {e}")
+                time.sleep(self.influxdb.metrics_interval)
 
     def build_packet(self, op, htype, hlen, xid, ciaddr, yiaddr, siaddr, chaddr, options):
         packet = struct.pack('!BBBBIHH4s4s4s4s', op, htype, hlen, 0, xid, 0, 0,
@@ -246,6 +256,8 @@ class DHCPServer:
 
                 msg_type, xid, chaddr, requested_ip, hostname, ciaddr, client_id = self.parse_packet(data)
                 mac = ':'.join(binascii.hexlify(chaddr).decode('utf-8')[i:i+2] for i in range(0, 12, 2))
+                self.metrics[msg_type] += 1
+
                 logging.info(
                     f"\n<< Получен запрос {msg_type_to_str(msg_type)}\n"
                     f"<< {explain_dhcp_type(msg_type)}\n"
@@ -253,6 +265,7 @@ class DHCPServer:
                 )
 
                 if self.db_manager.is_device_blocked(mac):
+                    self.metrics[6] += 1
                     self.nak_lease(mac, requested_ip or ciaddr, client_id)
                     options = b'\x35\x01\x06'
                     packet = self.build_packet(2, 1, 6, xid, '0.0.0.0', '0.0.0.0', self.config['server_ip'], chaddr, options)
@@ -269,6 +282,7 @@ class DHCPServer:
                 if msg_type == 1:  # DISCOVER
                     cache_key = (xid, mac)
                     if cache_key in self.discover_cache and self.discover_cache[cache_key]['expire_at'] > current_time:
+                        self.metrics[2] += 1
                         packet = self.discover_cache[cache_key]['packet']
                         sock.sendto(packet, ('255.255.255.255', 68))
                         logging.info(
@@ -281,7 +295,6 @@ class DHCPServer:
                     yiaddr = self.find_free_ip(mac, client_id)
                     if yiaddr:
                         ip_int = self.ip_to_int(yiaddr)
-                        
                         lease_type = self.db_manager.get_lease_type(mac) or 'DYNAMIC'
                         if not (self.pool_start_int <= ip_int <= self.pool_end_int) and lease_type == 'DYNAMIC':
                             logging.error(
@@ -291,6 +304,7 @@ class DHCPServer:
                             )
                             continue
                         
+                        self.metrics[2] += 1
                         options = self.get_options(2, yiaddr)
                         packet = self.build_packet(2, 1, 6, xid, '0.0.0.0', yiaddr, self.config['server_ip'], chaddr, options)
                         self.discover_cache[cache_key] = {
@@ -313,6 +327,7 @@ class DHCPServer:
                 elif msg_type == 3:  # REQUEST
                     cache_key = (xid, mac, requested_ip)
                     if cache_key in self.request_cache and self.request_cache[cache_key]['expire_at'] > current_time:
+                        self.metrics[5] += 1
                         packet = self.request_cache[cache_key]['packet']
                         sock.sendto(packet, ('255.255.255.255', 68))
                         logging.info(
@@ -329,6 +344,7 @@ class DHCPServer:
                         if row and row[1] == 'STATIC':
                             static_ip = row[0]
                             if requested_ip and requested_ip != static_ip:
+                                self.metrics[6] += 1
                                 self.nak_lease(mac, requested_ip, client_id)
                                 options = b'\x35\x01\x06'
                                 packet = self.build_packet(2, 1, 6, xid, '0.0.0.0', '0.0.0.0', self.config['server_ip'], chaddr, options)
@@ -345,6 +361,7 @@ class DHCPServer:
                             if requested_ip:
                                 requested_ip_int = self.ip_to_int(requested_ip)
                                 if requested_ip_int is None or not (self.pool_start_int <= requested_ip_int <= self.pool_end_int):
+                                    self.metrics[6] += 1
                                     self.nak_lease(mac, requested_ip, client_id)
                                     options = b'\x35\x01\x06'
                                     packet = self.build_packet(2, 1, 6, xid, '0.0.0.0', '0.0.0.0', self.config['server_ip'], chaddr, options)
@@ -357,6 +374,7 @@ class DHCPServer:
                                     continue
                                 cursor.execute("SELECT mac FROM leases WHERE ip = ? AND mac != ? AND deleted_at IS NULL", (requested_ip, mac))
                                 if cursor.fetchone():
+                                    self.metrics[6] += 1
                                     self.nak_lease(mac, requested_ip, client_id)
                                     options = b'\x35\x01\x06'
                                     packet = self.build_packet(2, 1, 6, xid, '0.0.0.0', '0.0.0.0', self.config['server_ip'], chaddr, options)
@@ -373,6 +391,7 @@ class DHCPServer:
                                 yiaddr = self.find_free_ip(mac, client_id)
                                 lease_type = 'DYNAMIC'
                                 if not yiaddr:
+                                    self.metrics[6] += 1
                                     self.nak_lease(mac, requested_ip or ciaddr, client_id)
                                     options = b'\x35\x01\x06'
                                     packet = self.build_packet(2, 1, 6, xid, '0.0.0.0', '0.0.0.0', self.config['server_ip'], chaddr, options)
@@ -385,6 +404,7 @@ class DHCPServer:
                                     continue
 
                         self.update_lease(mac, yiaddr, hostname, lease_type, client_id)
+                        self.metrics[5] += 1
                         options = self.get_options(5, yiaddr)
                         packet = self.build_packet(2, 1, 6, xid, '0.0.0.0', yiaddr, self.config['server_ip'], chaddr, options)
                         self.request_cache[cache_key] = {
@@ -403,6 +423,7 @@ class DHCPServer:
                     if new_ip:
                         lease_type = 'DYNAMIC'
                         self.update_lease(mac, new_ip, hostname, lease_type, client_id)
+                        self.metrics[5] += 1
                         options = self.get_options(5, new_ip)
                         packet = self.build_packet(2, 1, 6, xid, '0.0.0.0', new_ip, self.config['server_ip'], chaddr, options)
                         sock.sendto(packet, ('255.255.255.255', 68))
@@ -429,6 +450,7 @@ class DHCPServer:
                 elif msg_type == 8:  # INFORM
                     cache_key = (xid, mac, ciaddr)
                     if cache_key in self.inform_cache and self.inform_cache[cache_key]['expire_at'] > current_time:
+                        self.metrics[5] += 1
                         packet = self.inform_cache[cache_key]['packet']
                         sock.sendto(packet, (addr[0], 68))
                         logging.info(
@@ -443,6 +465,7 @@ class DHCPServer:
                         'packet': packet,
                         'expire_at': current_time + timedelta(seconds=self.cache_ttl)
                     }
+                    self.metrics[5] += 1
                     sock.sendto(packet, (addr[0], 68))
                     logging.info(
                         f"\n>> Отправлен ответ ACK\n"
@@ -451,7 +474,6 @@ class DHCPServer:
                     )
 
             except socket.timeout:
-                # Очистка устаревшего кэша для всех типов
                 current_time = datetime.now()
                 for cache in [self.discover_cache, self.request_cache, self.inform_cache]:
                     expired_keys = [k for k, v in cache.items() if v['expire_at'] <= current_time]
@@ -471,9 +493,11 @@ class DHCPServer:
         self.stop_event.clear()
         self.thread = threading.Thread(target=self.run)
         self.lease_check_thread = threading.Thread(target=self.periodic_lease_check)
+        self.metrics_thread = threading.Thread(target=self.periodic_metrics_flush)
         self.thread.start()
         self.lease_check_thread.start()
-        logging.info("Поток DHCP и поток проверки аренд запущены.")
+        self.metrics_thread.start()
+        logging.info("Поток DHCP, поток проверки аренд и поток отправки метрик запущены.")
 
     def stop(self):
         if not self.thread or not self.thread.is_alive():
@@ -482,7 +506,9 @@ class DHCPServer:
             self.stop_event.set()
             self.thread.join()
             self.lease_check_thread.join()
-            logging.info("Поток DHCP и поток проверки аренд остановлены.")
+            self.metrics_thread.join()
+            self.influxdb.close()
+            logging.info("Поток DHCP, поток проверки аренд и поток отправки метрик остановлены.")
 
 def msg_type_to_str(msg_type):
     types = {1: 'DISCOVER', 2: 'OFFER', 3: 'REQUEST', 4: 'DECLINE', 5: 'ACK', 6: 'NAK', 7: 'RELEASE', 8: 'INFORM'}

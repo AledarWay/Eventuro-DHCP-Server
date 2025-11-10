@@ -6,8 +6,8 @@
     <title>Консоль DHCP-сервера</title>
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='bootstrap-icons.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/bootstrap-icons.css') }}" rel="stylesheet">
     <style>
         body {
             background-color: #f0f2f5;
@@ -318,17 +318,15 @@
         .sort-icon.active {
             opacity: 1;
         }
-		
-		.custom-hostname::before {
+        .custom-hostname::before {
             color: #0096ff;
             margin-right: 5px;
             font-weight: bold;
         }
-		.custom-hostname {
-			color: #007bff !important;
-			font-weight: 500 !important;
-		}
-		
+        .custom-hostname {
+            color: #007bff !important;
+            font-weight: 500 !important;
+        }
         .th-resize-handle {
             position: absolute;
             top: 0;
@@ -350,7 +348,6 @@
         .table-responsive {
             overflow-x: auto;
         }
-        
         .pagination .page-item.disabled .page-link {
             color: #6c757d;
             pointer-events: none;
@@ -366,49 +363,40 @@
             text-align: center;
             padding: 0.375rem 0.75rem;
         }
-		/* Стили для доверенных устройств - только текст и иконка */
-		.trusted-device {
-			color: #28a745 !important;
-			font-weight: 500 !important;
-		}
-
-		.trusted-device:hover {
-			color: #1e7e34 !important;
-		}
-
-		[data-bs-theme="dark"] .trusted-device {
-			color: #28a745 !important;
-		}
-
-		[data-bs-theme="dark"] .trusted-device:hover {
-			color: #4caf50 !important;
-		}
-		
-		.trusted-device .bi-shield-check {
-			font-size: 0.8em !important;
-			vertical-align: middle;
-		}
-
-		.custom-hostname.trusted-device {
-			color: #28a745 !important;
-			font-weight: 600 !important;
-		}
-		
-		.custom-hostname.trusted-device::before {
-			color: #0096ff;
-			margin-right: 5px;
-			font-weight: bold;
-			z-index: 1;
-		}
-		
-		.history-section {
-			margin-top: 20px;
-			margin-bottom: 20px;
-		}
-		.table-wrapper {
-			margin-top: 20px;
-		}
-		
+        .trusted-device {
+            color: #28a745 !important;
+            font-weight: 500 !important;
+        }
+        .trusted-device:hover {
+            color: #1e7e34 !important;
+        }
+        [data-bs-theme="dark"] .trusted-device {
+            color: #28a745 !important;
+        }
+        [data-bs-theme="dark"] .trusted-device:hover {
+            color: #4caf50 !important;
+        }
+        .trusted-device .bi-shield-check {
+            font-size: 0.8em !important;
+            vertical-align: middle;
+        }
+        .custom-hostname.trusted-device {
+            color: #28a745 !important;
+            font-weight: 600 !important;
+        }
+        .custom-hostname.trusted-device::before {
+            color: #0096ff;
+            margin-right: 5px;
+            font-weight: bold;
+            z-index: 1;
+        }
+        .history-section {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .table-wrapper {
+            margin-top: 20px;
+        }
         @media (max-width: 767px) {
             body {
                 font-size: 1rem;
@@ -557,7 +545,7 @@
         }
     </style>
 </head>
-<body>
+<body data-get-free-ip-url="{{ url_for('get_free_ip') }}" data-logs-url="{{ url_for('logs') }}">
     <div class="container my-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -607,7 +595,6 @@
                 </tbody>
             </table>
         </div>
-
         <h3 class="mb-2">Список клиентов:</h3>
         <form method="GET" class="mb-3" id="filter-form">
             <div class="row g-3">
@@ -617,7 +604,7 @@
                 </div>
                 <div class="col-md-2 col-12">
                     <label for="ip" class="form-label">IP-адрес</label>
-                    <input type="text" name="ip" id="ip" class="form-control" value="{{ ip_filter }}" placeholder="192.168.X.X">
+                    <input type="text" name="ip" id="ip" class="form-control" value="{{ ip_filter }}" placeholder="{{ subnet_string }}">
                 </div>
                 <div class="col-md-2 col-12">
                     <label for="hostname" class="form-label">Имя хоста</label>
@@ -648,7 +635,6 @@
             <input type="hidden" name="sort_order" id="sort_order" value="{{ sort_order }}">
             <input type="hidden" name="per_page" id="per_page_hidden" value="{{ per_page }}">
         </form>
-
         <div class="table-responsive">
             <table class="table table-striped stats-table">
                 <thead>
@@ -709,20 +695,20 @@
                                 </button>
                             </td>
                             <td>
-								<span class="editable-cell hostname-cell {% if row[columns.index('is_custom_hostname')] == 'Да' %}custom-hostname{% endif %} {% if row[columns.index('trust_flag')] == 'Присутствует' %}trusted-device{% endif %}" data-mac="{{ row[columns.index('mac')] }}" data-value="{{ row[columns.index('hostname')] }}">
-									{% if row[columns.index('trust_flag')] == 'Присутствует' %}
-										<i class="bi bi-shield-check text-success me-1" style="font-size: 0.8em;" title="Доверенное устройство" data-bs-toggle="tooltip"></i>
-									{% endif %}
-									{{ row[columns.index('hostname')] }}
-									<img class="edit-icon" alt="Редактировать">
-								</span>
-								<form class="edit-field hostname-edit d-none" action="{{ url_for('update_hostname') }}" method="POST">
-									<input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
-									<input type="text" name="hostname" class="form-control" value="{{ row[columns.index('hostname')] }}">
-									<button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check"></i></button>
-									<button type="button" class="btn btn-sm btn-danger cancel-edit"><i class="bi bi-x"></i></button>
-								</form>
-							</td>
+                                <span class="editable-cell hostname-cell {% if row[columns.index('is_custom_hostname')] == 'Да' %}custom-hostname{% endif %} {% if row[columns.index('trust_flag')] == 'Присутствует' %}trusted-device{% endif %}" data-mac="{{ row[columns.index('mac')] }}" data-value="{{ row[columns.index('hostname')] }}">
+                                    {% if row[columns.index('trust_flag')] == 'Присутствует' %}
+                                        <i class="bi bi-shield-check text-success me-1" style="font-size: 0.8em;" title="Доверенное устройство" data-bs-toggle="tooltip"></i>
+                                    {% endif %}
+                                    {{ row[columns.index('hostname')] }}
+                                    <img class="edit-icon" alt="Редактировать">
+                                </span>
+                                <form class="edit-field hostname-edit d-none" action="{{ url_for('update_hostname') }}" method="POST">
+                                    <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                    <input type="text" name="hostname" class="form-control" value="{{ row[columns.index('hostname')] }}">
+                                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check"></i></button>
+                                    <button type="button" class="btn btn-sm btn-danger cancel-edit"><i class="bi bi-x"></i></button>
+                                </form>
+                            </td>
                             <td>
                                 <span class="editable-cell ip-cell" data-mac="{{ row[columns.index('mac')] }}" data-value="{{ row[columns.index('ip')] }}">
                                     {{ row[columns.index('ip')] }}
@@ -737,8 +723,8 @@
                             </td>
                             <td>{{ row[columns.index('mac')] }}</td>
                             <td class="{% if row[columns.index('is_expired')] == 'Неактивно' %}status-expired fw-bold{% else %}status-active fw-bold{% endif %}">
-								{{ row[columns.index('is_expired')] }}
-							</td>
+                                {{ row[columns.index('is_expired')] }}
+                            </td>
                             <td class="{% if row[columns.index('lease_type')] == 'Статическая' %}lease-static{% else %}lease-dynamic{% endif %}" style="color: {% if row[columns.index('lease_type')] == 'Статическая' %}#28a745{% else %}#007bff{% endif %} !important;">
                                 {{ row[columns.index('lease_type')] }}
                             </td>
@@ -747,7 +733,7 @@
                         <tr class="details-row collapse" id="details-{{ loop.index }}">
                             <td colspan="7">
                                 <div class="mb-2">
-                                    {% if row[columns.index('is_custom_hostname')] == 1 %}
+                                    {% if row[columns.index('is_custom_hostname')] == 'Да' %}
                                         <form method="POST" action="{{ url_for('reset_hostname_manual') }}" class="d-inline">
                                             <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
                                             <button type="submit" class="btn btn-outline-warning btn-sm">Сбросить имя</button>
@@ -766,19 +752,19 @@
                                             <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
                                         </form>
                                     {% endif %}
-									{% if row[columns.index('trust_flag')] == 'Отсутствует' %}
-										<form method="POST" action="{{ url_for('set_trust') }}" class="d-inline">
-											<input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
-											<input type="hidden" name="trust_flag" value="1">
-											<button type="submit" class="btn btn-outline-success btn-sm">Сделать доверенным</button>
-										</form>
-									{% else %}
-										<form method="POST" action="{{ url_for('set_trust') }}" class="d-inline">
-											<input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
-											<input type="hidden" name="trust_flag" value="0">
-											<button type="submit" class="btn btn-outline-warning btn-sm">Снять доверие</button>
-										</form>
-									{% endif %}
+                                    {% if row[columns.index('trust_flag')] == 'Отсутствует' %}
+                                        <form method="POST" action="{{ url_for('set_trust') }}" class="d-inline">
+                                            <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                            <input type="hidden" name="trust_flag" value="1">
+                                            <button type="submit" class="btn btn-outline-success btn-sm">Сделать доверенным</button>
+                                        </form>
+                                    {% else %}
+                                        <form method="POST" action="{{ url_for('set_trust') }}" class="d-inline">
+                                            <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
+                                            <input type="hidden" name="trust_flag" value="0">
+                                            <button type="submit" class="btn btn-outline-warning btn-sm">Снять доверие</button>
+                                        </form>
+                                    {% endif %}
                                     {% if row[columns.index('is_blocked')] == 'Заблокировано' %}
                                         <form method="POST" action="{{ url_for('unblock_device') }}" class="d-inline">
                                             <input type="hidden" name="mac" value="{{ row[columns.index('mac')] }}">
@@ -800,17 +786,17 @@
                                     </form>
                                 </div>
                                 <div class="table-wrapper mt-3">
-									<table class="table mb-0">
-										<tbody>
-											{% for col in ['id', 'mac', 'ip', 'hostname', 'client_id', 'create_channel', 'created_at', 'updated_at', 'expire_at', 'is_expired', 'lease_type', 'is_blocked', 'is_custom_hostname', 'trust_flag'] %}
-												<tr>
-													<th>{{ column_names[col] }}</th>
-													<td>{{ row[columns.index(col)] }}</td>
-												</tr>
-											{% endfor %}
-										</tbody>
-									</table>
-								</div>
+                                    <table class="table mb-0">
+                                        <tbody>
+                                            {% for col in ['id', 'mac', 'ip', 'hostname', 'client_id', 'create_channel', 'created_at', 'updated_at', 'expire_at', 'is_expired', 'lease_type', 'is_blocked', 'is_custom_hostname', 'trust_flag'] %}
+                                                <tr>
+                                                    <th>{{ column_names[col] }}</th>
+                                                    <td>{{ row[columns.index(col)] }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
                                 <div class="history-section">
                                     <h6>История изменений: <a href="{{ url_for('history', mac=row[columns.index('mac')]) }}" class="ms-2">Показать полностью</a></h6>
                                     <div class="table-responsive">
@@ -848,7 +834,6 @@
                 </tbody>
             </table>
         </div>
-
         <h3 class="mt-4 mb-2">Добавить статическую привязку</h3>
         <div class="card">
             <div class="card-header">
@@ -872,7 +857,7 @@
                                 </div>
                                 <div class="col-md-4">
                                     <label for="ip" class="form-label">IP-адрес</label>
-                                    <input type="text" name="ip" id="ip" class="form-control" placeholder="192.168.X.X" required>
+                                    <input type="text" name="ip" id="ip" class="form-control" placeholder="{{ subnet_string }}" required>
                                 </div>
                                 <div class="col-md-4">
                                     <label for="hostname" class="form-label">Имя хоста (необязательно)</label>
@@ -888,7 +873,7 @@
                         <form method="POST" action="{{ url_for('add_static') }}">
                             <div class="mb-3">
                                 <label for="bulk_data" class="form-label">Список привязок (формат: mac;ip;hostname, по одной на строку)</label>
-                                <textarea name="bulk_data" id="bulk_data" class="form-control add-static-form" placeholder="00:11:22:33:44:55;192.168.1.100;client1&#10;00:11:22:33:44:56;192.168.1.101"></textarea>
+                                <textarea name="bulk_data" id="bulk_data" class="form-control add-static-form" placeholder="00:11:22:33:44:55;{{ subnet_string }};client1&#10;00:11:22:33:44:56;{{ subnet_string.replace('.x', '.101') }}"></textarea>
                             </div>
                             <button type="submit" class="btn btn-primary">Добавить</button>
                         </form>
@@ -896,12 +881,11 @@
                 </div>
             </div>
         </div>
-
         <div class="mt-3 pagination-wrapper">
             <div class="d-flex justify-content-between align-items-center flex-column flex-sm-row per-page-container">
                 <div class="d-flex align-items-center gap-2 mb-2 mb-sm-0">
                     <label for="per_page" class="form-label mb-0">Клиентов на странице:</label>
-                    <select name="per_page" id="per_page" class="form-select" style="width: auto;" onchange="updatePerPage(this.value)">
+                    <select name="per_page" id="per_page" class="form-select" style="width: auto;">
                         {% for option in [5, 10, 20, 50] %}
                             <option value="{{ option }}" {% if per_page == option %}selected{% endif %}>{{ option }}</option>
                         {% endfor %}
@@ -909,41 +893,31 @@
                 </div>
                 <nav aria-label="Пагинация клиентов">
                     <ul class="pagination justify-content-center mb-0">
-                        <!-- Кнопка "Предыдущая" -->
                         <li class="page-item {% if page == 1 %}disabled{% endif %}">
                             <a class="page-link" href="{{ url_for('index', page=page-1, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}" aria-label="Предыдущая">
                                 <span aria-hidden="true">&laquo;</span>
                             </a>
                         </li>
-                        
-                        <!-- Сокращенная пагинация -->
                         {% set total_pages = total_pages|int %}
                         {% set current_page = page|int %}
-                        
                         {% if total_pages <= 7 %}
-                            {# Если страниц мало, показываем все #}
                             {% for p in range(1, total_pages + 1) %}
                                 <li class="page-item {% if p == current_page %}active{% endif %}">
                                     <a class="page-link" href="{{ url_for('index', page=p, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ p }}</a>
                                 </li>
                             {% endfor %}
                         {% else %}
-                            {# Показываем первые 2 страницы #}
                             <li class="page-item {% if 1 == current_page %}active{% endif %}">
                                 <a class="page-link" href="{{ url_for('index', page=1, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">1</a>
                             </li>
                             <li class="page-item {% if 2 == current_page %}active{% endif %}">
                                 <a class="page-link" href="{{ url_for('index', page=2, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">2</a>
                             </li>
-                            
-                            {# Многоточие после первых 2 страниц #}
                             {% if current_page > 4 %}
                                 <li class="page-item disabled">
                                     <span class="page-link">...</span>
                                 </li>
                             {% endif %}
-                            
-                            {# Показываем 3 страницы до и включая текущую #}
                             {% for offset in [0, 1, 2] %}
                                 {% set p = current_page - offset %}
                                 {% if p >= 3 and p <= total_pages - 2 %}
@@ -952,8 +926,6 @@
                                     </li>
                                 {% endif %}
                             {% endfor %}
-                            
-                            {# Показываем 2 страницы после текущей #}
                             {% for offset in [1, 2] %}
                                 {% set p = current_page + offset %}
                                 {% if p >= 3 and p <= total_pages - 2 %}
@@ -962,15 +934,11 @@
                                     </li>
                                 {% endif %}
                             {% endfor %}
-                            
-                            {# Многоточие перед последними 2 страницами #}
                             {% if current_page < total_pages - 3 %}
                                 <li class="page-item disabled">
                                     <span class="page-link">...</span>
                                 </li>
                             {% endif %}
-                            
-                            {# Показываем последние 2 страницы #}
                             <li class="page-item {% if total_pages - 1 == current_page %}active{% endif %}">
                                 <a class="page-link" href="{{ url_for('index', page=total_pages-1, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ total_pages - 1 }}</a>
                             </li>
@@ -978,8 +946,6 @@
                                 <a class="page-link" href="{{ url_for('index', page=total_pages, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}">{{ total_pages }}</a>
                             </li>
                         {% endif %}
-                        
-                        <!-- Кнопка "Следующая" -->
                         <li class="page-item {% if page == total_pages %}disabled{% endif %}">
                             <a class="page-link" href="{{ url_for('index', page=page+1, per_page=per_page, mac=mac_filter, ip=ip_filter, hostname=hostname_filter, lease_type=lease_type_filter, status=status_filter, sort_by=sort_by, sort_order=sort_order) }}" aria-label="Следующая">
                                 <span aria-hidden="true">&raquo;</span>
@@ -991,8 +957,6 @@
             <p class="text-center mt-2">Показано {{ start_index }}-{{ end_index }} из {{ total_leases }} клиентов (Страница {{ page }} из {{ total_pages }})</p>
         </div>
     </div>
-
-    <!-- Модальное окно для логов -->
     <div class="modal fade" id="logsModal" tabindex="-1" aria-labelledby="logsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
@@ -1009,8 +973,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Модальное окно для подтверждения блокировки -->
     <div class="modal fade" id="blockDeviceModal" tabindex="-1" aria-labelledby="blockDeviceModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -1028,8 +990,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Модальное окно для подтверждения сброса аренды -->
     <div class="modal fade" id="resetLeaseModal" tabindex="-1" aria-labelledby="resetLeaseModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -1047,8 +1007,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Модальное окно для подтверждения удаления -->
     <div class="modal fade" id="deleteLeaseModal" tabindex="-1" aria-labelledby="deleteLeaseModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -1069,193 +1027,7 @@
     <footer class="mt-4 text-center">
         <small class="text-dark">© 2025 Eventuro, DHCP Server</small>
     </footer>
-    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-    <script>
-        function updatePerPage(value) {
-            // Сохраняем в localStorage
-            localStorage.setItem('indexPerPage', value);
-            
-            // Обновляем скрытое поле
-            document.getElementById('per_page_hidden').value = value;
-            
-            // Отправляем форму с новым значением
-            document.getElementById('filter-form').submit();
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const themeToggle = document.getElementById('theme-toggle');
-            const currentTheme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-bs-theme', currentTheme);
-            themeToggle.textContent = currentTheme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-
-            themeToggle.addEventListener('click', () => {
-                const newTheme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-                document.documentElement.setAttribute('data-bs-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-                themeToggle.textContent = newTheme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-            });
-
-            document.querySelectorAll('.toggle-details').forEach(button => {
-                button.addEventListener('click', () => {
-                    const icon = button.querySelector('i');
-                    icon.classList.toggle('bi-chevron-right');
-                    icon.classList.toggle('bi-chevron-down');
-                });
-            });
-
-            document.querySelectorAll('.editable-cell').forEach(cell => {
-                cell.addEventListener('click', () => {
-                    const parentTd = cell.parentElement;
-                    const editForm = parentTd.querySelector('.edit-field');
-                    cell.classList.add('d-none');
-                    editForm.classList.remove('d-none');
-                    editForm.querySelector('input').focus();
-                });
-            });
-
-            document.querySelectorAll('.cancel-edit').forEach(button => {
-                button.addEventListener('click', () => {
-                    const editForm = button.closest('.edit-field');
-                    const cell = editForm.previousElementSibling;
-                    editForm.classList.add('d-none');
-                    cell.classList.remove('d-none');
-                });
-            });
-
-            document.querySelectorAll('.block-device-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    const mac = button.getAttribute('data-mac');
-                    document.getElementById('block-mac').textContent = mac;
-                    document.querySelector('.confirm-block').onclick = () => {
-                        document.getElementById(`block-device-form-${mac}`).submit();
-                    };
-                });
-            });
-
-            document.querySelectorAll('.reset-lease-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    const mac = button.getAttribute('data-mac');
-                    document.getElementById('reset-mac').textContent = mac;
-                    document.querySelector('.confirm-reset').onclick = () => {
-                        document.getElementById(`reset-lease-form-${mac}`).submit();
-                    };
-                });
-            });
-
-            document.querySelectorAll('.delete-lease-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    const mac = button.getAttribute('data-mac');
-                    document.getElementById('delete-mac').textContent = mac;
-                    document.querySelector('.confirm-delete').onclick = () => {
-                        document.getElementById(`delete-lease-form-${mac}`).submit();
-                    };
-                });
-            });
-
-            document.querySelectorAll('.sort-link').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const sortBy = link.getAttribute('data-sort-by');
-                    const sortOrder = link.getAttribute('data-sort-order');
-                    document.getElementById('sort_by').value = sortBy;
-                    document.getElementById('sort_order').value = sortOrder;
-                    document.getElementById('filter-form').submit();
-                });
-            });
-
-            const logsModal = document.getElementById('logsModal');
-            logsModal.addEventListener('show.bs.modal', () => {
-                const logsContent = document.getElementById('logs-content');
-                logsContent.textContent = 'Загрузка логов...';
-                fetch('{{ url_for("logs") }}')
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.logs) {
-                            logsContent.textContent = data.logs;
-                        } else {
-                            logsContent.textContent = data.error || 'Не удалось загрузить логи.';
-                        }
-                        setTimeout(() => {
-                            logsContent.scrollTop = logsContent.scrollHeight;
-                        }, 50);
-                    })
-                    .catch(() => {
-                        logsContent.textContent = 'Ошибка загрузки логов.';
-                        setTimeout(() => {
-                            logsContent.scrollTop = logsContent.scrollHeight;
-                        }, 50);
-                    });
-            });
-
-            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-            const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
-
-            // Ручное изменение размеров колонок
-            const resizers = document.querySelectorAll('.th-resize-handle');
-            let currentResizer, startX, startWidth, thElement;
-
-            resizers.forEach(resizer => {
-                resizer.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    currentResizer = resizer;
-                    thElement = resizer.parentElement;
-                    startX = e.pageX;
-                    startWidth = thElement.getBoundingClientRect().width;
-                    currentResizer.classList.add('active');
-                    document.addEventListener('mousemove', resize);
-                    document.addEventListener('mouseup', stopResize);
-                });
-            });
-
-            function resize(e) {
-                if (currentResizer) {
-                    const newWidth = startWidth + (e.pageX - startX);
-                    if (newWidth >= 50 && newWidth <= 500) {
-                        thElement.style.width = `${newWidth}px`;
-                        thElement.style.minWidth = `${newWidth}px`;
-                        const colIndex = Array.from(thElement.parentElement.children).indexOf(thElement);
-                        localStorage.setItem(`columnWidth_${colIndex}`, newWidth);
-                    }
-                }
-            }
-
-            function stopResize() {
-                if (currentResizer) {
-                    currentResizer.classList.remove('active');
-                    currentResizer = null;
-                    document.removeEventListener('mousemove', resize);
-                    document.removeEventListener('mouseup', stopResize);
-                }
-            }
-
-            document.querySelectorAll('.stats-table th').forEach((th, index) => {
-                const savedWidth = localStorage.getItem(`columnWidth_${index}`);
-                if (savedWidth) {
-                    th.style.width = `${savedWidth}px`;
-                    th.style.minWidth = `${savedWidth}px`;
-                }
-            });
-
-            // Автоматическое восстановление per_page при загрузке страницы
-            const savedPerPage = localStorage.getItem('indexPerPage');
-            const currentPerPage = {{ per_page }};
-            const perPageSelect = document.getElementById('per_page');
-            const perPageHidden = document.getElementById('per_page_hidden');
-            
-            if (savedPerPage && parseInt(savedPerPage) !== currentPerPage) {
-                // Если сохраненное значение отличается от текущего, обновляем select и отправляем форму
-                perPageSelect.value = savedPerPage;
-                perPageHidden.value = savedPerPage;
-                // Добавляем небольшую задержку, чтобы избежать конфликта с загрузкой страницы
-                setTimeout(() => {
-                    document.getElementById('filter-form').submit();
-                }, 100);
-            } else if (savedPerPage) {
-                // Если значение совпадает, просто обновляем select
-                perPageSelect.value = savedPerPage;
-                perPageHidden.value = savedPerPage;
-            }
-        });
-    </script>
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
 </body>
 </html>
