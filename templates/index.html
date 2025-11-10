@@ -873,7 +873,7 @@
                         <form method="POST" action="{{ url_for('add_static') }}">
                             <div class="mb-3">
                                 <label for="bulk_data" class="form-label">Список привязок (формат: mac;ip;hostname, по одной на строку)</label>
-                                <textarea name="bulk_data" id="bulk_data" class="form-control add-static-form" placeholder="00:11:22:33:44:55;{{ subnet_string }};client1&#10;00:11:22:33:44:56;{{ subnet_string.replace('.x', '.101') }}"></textarea>
+                                <textarea name="bulk_data" id="bulk_data" class="form-control add-static-form" placeholder="00:11:22:33:44:55;{{ subnet_string.replace('.x', '.100') }};client1&#10;00:11:22:33:44:56;{{ subnet_string.replace('.x', '.101') }}"></textarea>
                             </div>
                             <button type="submit" class="btn btn-primary">Добавить</button>
                         </form>
