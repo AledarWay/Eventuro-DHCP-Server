@@ -766,20 +766,30 @@ def create_app(server, db_manager, auth_manager):
     @login_required
     def logs():
         try:
-            with open(server.config['log_file'], 'r', encoding='utf-8', errors='replace') as f:
-                logs = f.read()
+            log_lines = []
+            max_lines = 1000  # Ограничение на количество строк
+            log_file_path = server.config['log_file']
+            
+            with open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+                from collections import deque
+                log_lines = deque(maxlen=max_lines)
+                for line in f:
+                    log_lines.append(line.rstrip('\n'))
+            
+            # Объединяем строки для ответа
+            logs = '\n'.join(log_lines)
             return jsonify({'logs': logs})
         except UnicodeDecodeError as ude:
-            logging.error(f"Error decoding logs file {server.config['log_file']}: {ude}")
+            logging.error(f"Error decoding logs file {log_file_path}: {ude}")
             return jsonify({'error': 'Ошибка декодирования файла логов.'}), 500
         except FileNotFoundError:
-            logging.error(f"Log file not found: {server.config['log_file']}")
+            logging.error(f"Log file not found: {log_file_path}")
             return jsonify({'error': 'Файл логов не найден.'}), 500
         except PermissionError:
-            logging.error(f"Permission denied accessing log file: {server.config['log_file']}")
+            logging.error(f"Permission denied accessing log file: {log_file_path}")
             return jsonify({'error': 'Нет прав доступа к файлу логов.'}), 500
         except Exception as e:
-            logging.error(f"Unexpected error reading logs from {server.config['log_file']}: {e}")
+            logging.error(f"Unexpected error reading logs from {log_file_path}: {e}")
             return jsonify({'error': 'Произошла непредвиденная ошибка при чтении логов.'}), 500
 
     @app.route('/api/client/<ip>', methods=['GET'])
