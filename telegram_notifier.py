@@ -135,8 +135,9 @@ class TelegramNotifier:
                 f"ℹ️ *Имя*: {hostname}\n"
                 f"🔌 *{mac_label}*: {mac}\n"
                 f"✉️ *{ip_label}*: {ip}\n"
+                f"🌐 *Сеть*: {domain_name}\n"
                 f"📱 Управление: [Открыть]({web_url})\n"
-                f"🕒 *Время*: {current_time}"
+                f"🕒 Время: {current_time}"
             )
             self.send_message(message)
         elif not is_new_device and self.notify_inactive and time_diff:
@@ -147,7 +148,8 @@ class TelegramNotifier:
                 f"ℹ️ *Имя*: {hostname}\n"
                 f"🔌 *{mac_label}*: {mac}\n"
                 f"✉️ *{ip_label}*: {ip}\n"
+                f"🌐 *Сеть*: {domain_name}\n"
                 f"📱 Управление: [Открыть]({web_url})\n"
-                f"🕒 *Время*: {current_time}"
+                f"🕒 Время: {current_time}"
             )
             self.send_message(message)
