@@ -127,39 +127,49 @@ class DBManager:
     def migrate_subnet(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
+
+            # Текущие параметры сети
             mask_int = self.ip_to_int(self.config['subnet_mask'])
             new_network_int = self.ip_to_int(self.config['server_ip']) & mask_int
-            pool_start_int = self.ip_to_int(self.config['pool_start'])
-            pool_end_int = self.ip_to_int(self.config['pool_end'])
-            cursor.execute("SELECT mac, ip, hostname, client_id FROM leases WHERE ip IS NOT NULL")
-            rows = cursor.fetchall()
-            for mac, old_ip, hostname, client_id in rows:
-                try:
-                    old_ip_int = self.ip_to_int(old_ip)
-                    host_part = old_ip_int & ~mask_int
-                    new_ip_int = new_network_int | host_part
-                    new_ip = self.int_to_ip(new_ip_int)
-                    if pool_start_int <= new_ip_int <= pool_end_int:
-                        cursor.execute("SELECT 1 FROM leases WHERE ip = ? AND deleted_at IS NULL", (new_ip,))
-                        if not cursor.fetchone():
-                            cursor.execute("UPDATE leases SET ip = ? WHERE mac = ?", (new_ip, mac))
-                            self._insert_history(mac, 'STATIC_ASSIGNED', old_ip, new_ip, hostname or None, client_id,
-                                                 f"Назначен статический IP: {new_ip}", 
-                                                 datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
-                            logging.info(f"Миграция IP для MAC {mac}, client_id {client_id or 'не указан'}: {old_ip} -> {new_ip}")
-                            continue
-                    new_ip = self._get_new_dynamic_ip(cursor, pool_start_int, pool_end_int)
-                    if new_ip:
-                        cursor.execute("UPDATE leases SET ip = ?, lease_type = 'DYNAMIC' WHERE mac = ?", (new_ip, mac))
-                        self._insert_history(mac, 'DYNAMIC_ASSIGNED', old_ip, new_ip, hostname or None, client_id,
-                                             f"Выдана новая аренда: IP {new_ip} до {(datetime.now() + timedelta(seconds=self.config['lease_time'])).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}",
-                                             datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3])
-                        logging.info(f"Назначен новый IP для MAC {mac}, client_id {client_id or 'не указан'}: {old_ip} -> {new_ip} (ДИНАМИЧЕСКИЙ)")
-                    else:
-                        logging.error(f"Нет свободных IP для миграции MAC {mac}, client_id {client_id or 'не указан'}")
-                except Exception as e:
-                    logging.error(f"Ошибка при миграции IP для MAC {mac}, client_id {client_id or 'не указан'}: {e}")
-            conn.commit()
+
+            # Все активные аренды
+            cursor.execute("SELECT mac, ip, hostname, client_id FROM leases WHERE ip IS NOT NULL AND deleted_at IS NULL")
+            leases = cursor.fetchall()
+
+            # Список уже занятых IP в новой подсети
+            cursor.execute("SELECT ip FROM leases WHERE ip IS NOT NULL AND deleted_at IS NULL")
+            used_ips_new = {self.ip_to_int(row[0]) for row in cursor.fetchall() if row[0]}
+
+            updates = []  # собираем изменения для батч-обновления
+
+            for mac, old_ip, hostname, client_id in leases:
+                old_ip_int = self.ip_to_int(old_ip)
+                host_part = old_ip_int & ~mask_int                    # оставляем только хост-часть
+                candidate_int = new_network_int | host_part           # новая подсеть + старая хост-часть
+                candidate_ip = self.int_to_ip(candidate_int)
+                new_ip = candidate_ip
+                used_ips_new.add(candidate_int)
+
+                if new_ip:
+                    updates.append((new_ip, mac))
+                    logging.info(f"Миграция IP для MAC {mac}, client_id {client_id or 'не указан'}: {old_ip} → {new_ip}")
+                    self._insert_history(
+                        mac=mac,
+                        action='SUBNET_MIGRATE',
+                        ip=old_ip,
+                        new_ip=new_ip,
+                        name=hostname,
+                        client_id=client_id,
+                        description=f"Смена IP с {old_ip} на {new_ip}",
+                        change_channel='DHCP'
+                    )
+                else:
+                    logging.error(f"Не удалось найти свободный IP при миграции для MAC {mac}")
+
+            if updates:
+                cursor.executemany("UPDATE leases SET ip = ? WHERE mac = ?", updates)
+                conn.commit()
+                logging.info(f"Миграция подсети завершена. Обновлено записей: {len(updates)}")
 
     def _insert_history(self, mac, action, ip=None, new_ip=None, name=None, client_id=None, description=None, timestamp=None, new_name=None, change_channel='DHCP'):
         with self.get_history_connection() as conn:

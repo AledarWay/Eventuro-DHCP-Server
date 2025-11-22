@@ -136,6 +136,7 @@ def create_app(server, db_manager, auth_manager):
         'LEASE_RELEASED': 'Освобождение аренды',
         'INFORM': 'Информационный запрос',
         'TRUST_CHANGED': 'Изменение доверенности',
+        'SUBNET_MIGRATE': 'Миграция подсети'
     }
     
     def login_required(f):
