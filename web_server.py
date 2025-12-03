@@ -10,13 +10,19 @@ import os
 from datetime import datetime
 
 def log_request(endpoint, request_headers, request_body, response_headers, response_body):
-    logging.info(f"<< Получен запрос в API по {endpoint}")
-    logging.info(f"<< Address: {request.url}")
-    logging.info(f"<< Headers: {dict(request_headers)}")
-    logging.debug(f"<< Body: {request_body}")
-    logging.info(f">> Отправлен ответ в API по {endpoint}")
-    logging.info(f">> Headers: {dict(response_headers)}")
-    logging.debug(f">> Body: {response_body}")
+    log_message = (
+        f"<< Получен запрос по {endpoint}\n"
+        f"<< Address: {request.url}\n"
+        f"<< Headers: {dict(request_headers)}\n"
+        f"<< Body: {request_body}"
+    )
+    logging.info(log_message)
+    log_message = (
+        f">> Отправлен ответ по {endpoint}\n"
+        f">> Headers: {dict(response_headers)}\n"
+        f">> Body: {response_body}"
+    )
+    logging.info(log_message)
 
 def format_date(date_str):
     if not date_str:
