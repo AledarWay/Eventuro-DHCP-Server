@@ -8,6 +8,7 @@ from dhcp_server import DHCPServer
 from db_manager import DBManager, AuthManager
 from telegram_notifier import TelegramNotifier
 from web_server import create_app, validate_config
+from opensearch_logger import OpenSearchHandler
 
 class CustomRotatingFileHandler(RotatingFileHandler):
     def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None, delay=False):
@@ -39,6 +40,23 @@ class CustomFormatter(logging.Formatter):
         dt = datetime.fromtimestamp(record.created)
         return dt.strftime('%Y-%m-%d %H:%M:%S.%f')
 
+class StructuredJSONFormatter(logging.Formatter):
+    def format(self, record):
+        dt = datetime.fromtimestamp(record.created)
+        timestamp = dt.strftime('%Y-%m-%d %H:%M:%S') + f'.{int(dt.microsecond / 1000):03d}'
+        log_data = {
+            "timestamp": timestamp,
+            "level": record.levelname,
+            "logger": record.name,
+            "function": record.funcName,
+            "message": record.getMessage(),
+            "line": record.lineno,
+            "thread": record.threadName
+        }
+        if record.exc_info:
+            log_data["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_data, ensure_ascii=False)
+
 def flatten_config(config):
     flat_config = {}
     sections = {
@@ -55,7 +73,8 @@ def flatten_config(config):
                     'telegram_notify_inactive_device', 'inactive_period', 
                     'telegram_bot_token', 'telegram_chat_id', 'telegram_thread_id', 
                     'telegram_web_url', 'telegram_retries', 'telegram_retry_interval'],
-        'influxdb': ['metrics_enabled', 'url', 'token', 'org', 'bucket', 'measurement', 'metrics_interval']
+        'influxdb': ['metrics_enabled', 'influx_url', 'influx_token', 'influx_org', 'influx_bucket', 'influx_measurement', 'metrics_interval'],
+        'opensearch': ['os_send_enabled', 'os_urls', "os_index", "os_flush_interval"]
     }
 
     for section, keys in sections.items():
@@ -117,7 +136,22 @@ def main():
     logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
 
-    logging.info("Запуск сервера...")
+    # OpenSearch handler
+    if config['os_send_enabled']:
+        es_handler = OpenSearchHandler(
+            hosts=config['os_urls'],
+            http_compress=True,
+            use_ssl=False,
+            index_name=config['os_index'],
+            index_rotate=None,
+            flush_frequency_in_sec=config['os_flush_interval']
+        )
+        es_handler.setFormatter(StructuredJSONFormatter())
+        es_handler.setLevel(config['log_level'])
+        logger.addHandler(es_handler)
+        logging.getLogger("opensearch").setLevel(logging.WARNING)
+
+    logging.info("Запуск DHCP сервера...")
     
     try:
         auth_manager = AuthManager(config['auth_db_file'])

@@ -3,7 +3,6 @@ import datetime
 import logging
 import socket
 import struct
-import time
 from datetime import datetime, timedelta
 
 class DBManager:
@@ -48,7 +47,7 @@ class DBManager:
                 )
             ''')
             conn.commit()
-        logging.info("Инициализирована основная база данных SQLite.")
+        logging.info("Инициализирована основная база данных.")
 
     def init_history_db(self):
         with self.get_history_connection() as conn:
@@ -69,7 +68,7 @@ class DBManager:
                 )
             ''')
             conn.commit()
-        logging.info("Инициализирована база данных истории SQLite.")
+        logging.info("Инициализирована база данных истории.")
 
     def clean_old_history(self):
         if self.history_cleanup_days == 0:
@@ -104,14 +103,14 @@ class DBManager:
             rows = cursor.fetchall()
             inconsistent = False
             for mac, ip in rows:
-                if not self._is_in_subnet(ip):
+                if not self.is_in_subnet(ip):
                     inconsistent = True
                     break
             if inconsistent:
                 logging.warning("Обнаружено несоответствие подсети. Начинается миграция...")
                 self.migrate_subnet()
 
-    def _is_in_subnet(self, ip):
+    def is_in_subnet(self, ip):
         try:
             if not ip:
                 return False
@@ -123,7 +122,7 @@ class DBManager:
         except Exception as e:
             logging.error(f"Ошибка при проверке подсети для IP {ip}: {e}")
             return False
-
+        
     def migrate_subnet(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -153,7 +152,7 @@ class DBManager:
                 if new_ip:
                     updates.append((new_ip, mac))
                     logging.info(f"Миграция IP для MAC {mac}, client_id {client_id or 'не указан'}: {old_ip} → {new_ip}")
-                    self._insert_history(
+                    self.insert_history(
                         mac=mac,
                         action='SUBNET_MIGRATE',
                         ip=old_ip,
@@ -171,7 +170,7 @@ class DBManager:
                 conn.commit()
                 logging.info(f"Миграция подсети завершена. Обновлено записей: {len(updates)}")
 
-    def _insert_history(self, mac, action, ip=None, new_ip=None, name=None, client_id=None, description=None, timestamp=None, new_name=None, change_channel='DHCP'):
+    def insert_history(self, mac, action, ip=None, new_ip=None, name=None, client_id=None, description=None, timestamp=None, new_name=None, change_channel='DHCP'):
         with self.get_history_connection() as conn:
             cursor = conn.cursor()
             if timestamp is None:
@@ -189,7 +188,7 @@ class DBManager:
             cursor.execute("SELECT mac, ip, hostname, client_id FROM leases WHERE lease_type = 'DYNAMIC' AND expire_at <= ? AND is_expired = 0 AND deleted_at IS NULL", (current_time,))
             expired_leases = cursor.fetchall()
             for mac, ip, hostname, client_id in expired_leases:
-                self._insert_history(mac, 'LEASE_EXPIRED', ip, None, hostname or None, client_id,
+                self.insert_history(mac, 'LEASE_EXPIRED', ip, None, hostname or None, client_id,
                                      f"Аренда IP {ip} истекла",
                                      current_time)
             cursor.execute("""
@@ -214,7 +213,7 @@ class DBManager:
             if row:
                 hostname, lease_type, db_client_id = row
                 if lease_type == 'DYNAMIC':
-                    self._insert_history(mac, 'LEASE_RELEASED', ip, None, hostname or None, client_id,
+                    self.insert_history(mac, 'LEASE_RELEASED', ip, None, hostname or None, client_id,
                                         f"Аренда IP {ip} освобождена клиентом",
                                         current_time)
                     cursor.execute("""
@@ -229,7 +228,7 @@ class DBManager:
                     logging.info(f"Аренда помечена как истёкшая для MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
                 else:
                     logging.warning(f"RELEASE проигнорирован для статической аренды MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
-                    self._insert_history(mac, 'LEASE_RELEASED', ip, None, hostname or None, client_id,
+                    self.insert_history(mac, 'LEASE_RELEASED', ip, None, hostname or None, client_id,
                                         f"Освобождение статического IP {ip} проигнорировано",
                                         current_time)
             else:
@@ -258,7 +257,7 @@ class DBManager:
                         updated_at = ?
                     WHERE mac = ?
                 """, (current_time, mac))
-                self._insert_history(mac, 'DEVICE_BLOCKED', ip, None, hostname or None, client_id,
+                self.insert_history(mac, 'DEVICE_BLOCKED', ip, None, hostname or None, client_id,
                                      f"Устройство заблокировано, IP {ip or 'не назначен'} освобождён",
                                      current_time)
                 conn.commit()
@@ -280,7 +279,7 @@ class DBManager:
                         updated_at = ?
                     WHERE mac = ?
                 """, (current_time, mac))
-                self._insert_history(mac, 'DEVICE_UNBLOCKED', None, None, hostname or None, client_id,
+                self.insert_history(mac, 'DEVICE_UNBLOCKED', None, None, hostname or None, client_id,
                                      f"Устройство разблокировано",
                                      current_time)
                 conn.commit()
@@ -336,7 +335,7 @@ class DBManager:
                 description = f"Устройство {hostname or 'неизвестное'} перестало быть доверенным."
                 action = 'TRUST_CHANGED'
 
-            self._insert_history(
+            self.insert_history(
                 mac=mac,
                 action=action,
                 ip=ip,
@@ -376,9 +375,9 @@ class DBManager:
                         return ip, lease_type
                     else:
                         logging.warning(f"Существующий IP {ip} для MAC {mac} вне пула ({self.int_to_ip(pool_start_int)}-{self.int_to_ip(pool_end_int)}). Назначается новый IP.")
-            return self._get_new_dynamic_ip(cursor, pool_start_int, pool_end_int), 'DYNAMIC'
+            return self.get_new_dynamic_ip(cursor, pool_start_int, pool_end_int), 'DYNAMIC'
 
-    def _get_new_dynamic_ip(self, cursor, pool_start_int, pool_end_int):
+    def get_new_dynamic_ip(self, cursor, pool_start_int, pool_end_int):
         cursor.execute("SELECT ip FROM leases WHERE ip IS NOT NULL AND deleted_at IS NULL")
         used_ips = {self.ip_to_int(row[0]) for row in cursor.fetchall() if row[0]}
         for ip_int in range(pool_start_int, pool_end_int + 1):
@@ -457,11 +456,11 @@ class DBManager:
             description = f"Создан новый клиент, имя хоста: {hostname or 'не указано'}"
             if create_channel == 'STATIC_LEASE':
                 description = f"Создан новый клиент через статическую привязку, IP {ip}, имя хоста: {hostname or 'не указано'}"
-            self._insert_history(mac, 'CLIENT_CREATE', None, ip, hostname or None, client_id, description, current_time_str, change_channel=change_channel)
+            self.insert_history(mac, 'CLIENT_CREATE', None, ip, hostname or None, client_id, description, current_time_str, change_channel=change_channel)
             
             if lease_type == 'DYNAMIC':
                 lease_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                self._insert_history(mac, 'LEASE_ISSUED', None, ip, hostname or None, client_id,
+                self.insert_history(mac, 'LEASE_ISSUED', None, ip, hostname or None, client_id,
                                     f"Выдана новая аренда: IP {ip} до {expire_at}",
                                     lease_time_str, change_channel=change_channel)
             
@@ -500,7 +499,7 @@ class DBManager:
             time_diff = None
             if lease_type == 'DYNAMIC':
                 new_expire_at = (datetime.now() + timedelta(seconds=self.config['lease_time'])).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                time_diff = self._get_time_diff(mac)
+                time_diff = self.get_time_diff(mac)
                 
             cursor.execute("""
                 UPDATE leases
@@ -515,11 +514,11 @@ class DBManager:
             history_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             if lease_type == 'STATIC':
                 description = f"Назначен статический IP: {new_ip}"
-                self._insert_history(mac, 'STATIC_ASSIGNED', old_ip, new_ip, hostname or None, client_id or old_client_id,
+                self.insert_history(mac, 'STATIC_ASSIGNED', old_ip, new_ip, hostname or None, client_id or old_client_id,
                                     description, history_time_str, change_channel=change_channel)
             else:
                 description = f"Выдана новая аренда: IP {new_ip}"
-                self._insert_history(mac, 'LEASE_ISSUED', old_ip, new_ip, hostname or None, client_id or old_client_id,
+                self.insert_history(mac, 'LEASE_ISSUED', old_ip, new_ip, hostname or None, client_id or old_client_id,
                                     description, history_time_str, change_channel=change_channel)
                 
             conn.commit()
@@ -557,7 +556,7 @@ class DBManager:
                     is_custom_hostname = ?
                 WHERE mac = ?
             """, (hostname, current_time_str, client_id or old_client_id, 1 if change_channel == 'WEB' else is_custom_hostname, mac))
-            self._insert_history(mac, 'HOSTNAME_UPDATED', ip, None, old_hostname or None, client_id or old_client_id,
+            self.insert_history(mac, 'HOSTNAME_UPDATED', ip, None, old_hostname or None, client_id or old_client_id,
                                 f"Имя хоста изменено на {hostname}",
                                 current_time_str, new_name=hostname, change_channel=change_channel)
             conn.commit()
@@ -583,12 +582,12 @@ class DBManager:
 
             if lease_type != 'DYNAMIC':
                 logging.info(f"Продление аренды проигнорировано для статической аренды MAC {mac}, client_id {client_id or old_client_id or 'не указан'}: IP {ip}")
-                self._insert_history(mac, 'LEASE_RENEWED', ip, None, hostname or None, client_id or old_client_id,
+                self.insert_history(mac, 'LEASE_RENEWED', ip, None, hostname or None, client_id or old_client_id,
                                 f"Статический IP {ip} выдан клиенту бессрочно",
                                 current_time_str, change_channel=change_channel)
                 return
             
-            time_diff = self._get_time_diff(mac)
+            time_diff = self.get_time_diff(mac)
 
             new_expire_at = (datetime.now() + timedelta(seconds=self.config['lease_time'])).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             cursor.execute("""
@@ -598,7 +597,7 @@ class DBManager:
                     client_id = ?
                 WHERE mac = ?
             """, (new_expire_at, current_time_str, client_id or old_client_id, mac))
-            self._insert_history(mac, 'LEASE_RENEWED', ip, None, hostname or None, client_id or old_client_id,
+            self.insert_history(mac, 'LEASE_RENEWED', ip, None, hostname or None, client_id or old_client_id,
                                 f"Аренда IP {ip} продлена до {new_expire_at}",
                                 current_time_str, change_channel=change_channel)
             
@@ -640,7 +639,7 @@ class DBManager:
             """, (lease_type, expire_at, is_expired, current_time_str, client_id or old_client_id, mac))
             action = 'STATIC_ASSIGNED' if lease_type == 'STATIC' else 'DYNAMIC_ASSIGNED'
             description = f"Назначен статический IP: {ip}" if lease_type == 'STATIC' else f"Выдана новая аренда: IP {ip} до {expire_at}"
-            self._insert_history(mac, action, ip, ip, hostname or None, client_id or old_client_id,
+            self.insert_history(mac, action, ip, ip, hostname or None, client_id or old_client_id,
                                 description, current_time_str, change_channel=change_channel)
             
             conn.commit()
@@ -658,7 +657,7 @@ class DBManager:
             if row:
                 hostname, lease_type, db_client_id = row
                 if lease_type == 'DYNAMIC':
-                    self._insert_history(mac, 'DECLINE', ip, None, hostname or None, client_id or db_client_id,
+                    self.insert_history(mac, 'DECLINE', ip, None, hostname or None, client_id or db_client_id,
                                         f"Клиент отклонил предложенный IP {ip}", current_time, change_channel='DHCP')
                     cursor.execute("""
                         UPDATE leases
@@ -678,7 +677,7 @@ class DBManager:
             # Предложить новый IP, если указаны границы пула
             new_ip = None
             if pool_start_int and pool_end_int:
-                new_ip = self._get_new_dynamic_ip(cursor, pool_start_int, pool_end_int)
+                new_ip = self.get_new_dynamic_ip(cursor, pool_start_int, pool_end_int)
                 if new_ip:
                     cursor.execute("""
                         UPDATE leases
@@ -688,7 +687,7 @@ class DBManager:
                             updated_at = ?
                         WHERE mac = ?
                     """, (new_ip, (datetime.now() + timedelta(seconds=self.config['lease_time'])).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3], current_time, mac))
-                    self._insert_history(mac, 'LEASE_ISSUED', None, new_ip, hostname or None, client_id or db_client_id,
+                    self.insert_history(mac, 'LEASE_ISSUED', None, new_ip, hostname or None, client_id or db_client_id,
                                         f"Выдана новая аренда: IP {new_ip} до {(datetime.now() + timedelta(seconds=self.config['lease_time'])).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}",
                                         current_time, change_channel='DHCP')
                     logging.info(f"Назначен новый IP для MAC {mac}, client_id {client_id or 'не указан'}: {new_ip} после DECLINE")
@@ -705,7 +704,7 @@ class DBManager:
             row = cursor.fetchone()
             if row:
                 hostname, lease_type, db_client_id = row
-                self._insert_history(mac, 'NAK', ip, None, hostname or None, client_id or db_client_id,
+                self.insert_history(mac, 'NAK', ip, None, hostname or None, client_id or db_client_id,
                                     f"Отказ на выдачу запрошенного IP {ip}", current_time, change_channel='DHCP')
                 logging.info(f"DHCPNAK обработан для MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
             conn.commit()
@@ -718,12 +717,12 @@ class DBManager:
             row = cursor.fetchone()
             if row:
                 hostname, lease_type, db_client_id = row
-                self._insert_history(mac, 'INFORM', ip, None, hostname or None, client_id or db_client_id,
+                self.insert_history(mac, 'INFORM', ip, None, hostname or None, client_id or db_client_id,
                                     f"Предоставлены сетевые параметры для клиента с IP {ip}", current_time, change_channel='DHCP')
                 logging.info(f"DHCPINFORM обработан для MAC {mac}, client_id {client_id or 'не указан'}, IP {ip}")
             conn.commit()
 
-    def _get_time_diff(self, mac):
+    def get_time_diff(self, mac):
         last_activity_time = self.get_last_activity_time(mac)
         logging.info(f"Последняя активность для MAC {mac}: {last_activity_time}")
         if last_activity_time:
@@ -776,7 +775,7 @@ class DBManager:
                         lease_type = 'DYNAMIC'
                     WHERE mac = ?
                 """, (current_time, mac))
-                self._insert_history(mac, 'DEVICE_DELETED', ip, None, hostname or None, client_id,
+                self.insert_history(mac, 'DEVICE_DELETED', ip, None, hostname or None, client_id,
                                      f"Устройство удалено",
                                      current_time)
                 conn.commit()
@@ -839,7 +838,7 @@ class AuthManager:
                     password_hash TEXT NOT NULL
                 )
             ''')
-        logging.info("Инициализирована база данных аутентификации SQLite.")
+        logging.info("Инициализирована база данных аутентификации.")
 
     def user_exists(self):
         with self.get_auth_connection() as conn:

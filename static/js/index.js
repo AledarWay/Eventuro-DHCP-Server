@@ -127,28 +127,58 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const logsModal = document.getElementById('logsModal');
-    logsModal.addEventListener('show.bs.modal', () => {
-        const logsContent = document.getElementById('logs-content');
-        logsContent.textContent = 'Загрузка логов...';
-        fetch(logsUrl)
-            .then(response => response.json())
-            .then(data => {
-                if (data.logs) {
-                    logsContent.textContent = data.logs;
-                } else {
-                    logsContent.textContent = data.error || 'Не удалось загрузить логи.';
-                }
-                setTimeout(() => {
-                    logsContent.scrollTop = logsContent.scrollHeight;
-                }, 50);
-            })
-            .catch(() => {
-                logsContent.textContent = 'Ошибка загрузки логов.';
-                setTimeout(() => {
-                    logsContent.scrollTop = logsContent.scrollHeight;
-                }, 50);
-            });
-    });
+	let isLogsLoaded = false;
+
+	logsModal.addEventListener('show.bs.modal', () => {
+		const logsContent = document.getElementById('logs-content');
+		logsContent.textContent = 'Загрузка логов...';
+		isLogsLoaded = false;
+		
+		fetch(logsUrl)
+			.then(response => response.json())
+			.then(data => {
+				if (data.logs) {
+					logsContent.textContent = data.logs;
+				} else {
+					logsContent.textContent = data.error || 'Не удалось загрузить логи.';
+				}
+				isLogsLoaded = true;
+			})
+			.catch(() => {
+				logsContent.textContent = 'Ошибка загрузки логов.';
+				isLogsLoaded = true;
+			});
+	});
+
+	logsModal.addEventListener('shown.bs.modal', () => {
+		const logsContent = document.getElementById('logs-content');
+		const scrollToBottom = () => {
+			if (logsContent.scrollHeight > logsContent.clientHeight) {
+				logsContent.scrollTop = logsContent.scrollHeight;
+				logsContent.scrollTo({
+					top: logsContent.scrollHeight,
+					behavior: 'auto'
+				});
+			}
+		};
+		
+		if (isLogsLoaded) {
+			scrollToBottom();
+		} else {
+			let attempts = 0;
+			const checkInterval = setInterval(() => {
+				if (isLogsLoaded || attempts >= 50) {
+					clearInterval(checkInterval);
+					scrollToBottom();
+				}
+				attempts++;
+			}, 100);
+		}
+	});
+	
+	logsModal.addEventListener('hide.bs.modal', () => {
+		isLogsLoaded = false;
+	});
 
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
@@ -215,5 +245,105 @@ document.addEventListener('DOMContentLoaded', () => {
 	
     perPageSelect.addEventListener('change', () => {
         updatePerPage(perPageSelect.value);
+    });
+});
+
+document.querySelectorAll('.modal').forEach(modal => {
+    const header = modal.querySelector('.modal-header');
+    if (!header) return;
+
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let initialLeft = 0;
+    let initialTop = 0;
+
+    const startDrag = (e) => {
+        if (e.target.closest('.btn-close')) return;
+
+        e.preventDefault();
+
+        const clientX = e.clientX || e.touches?.[0].clientX;
+        const clientY = e.clientY || e.touches?.[0].clientY;
+
+        startX = clientX;
+        startY = clientY;
+
+        const dialog = modal.querySelector('.modal-dialog');
+
+        const rect = dialog.getBoundingClientRect();
+        dialog.style.position = 'fixed';
+        dialog.style.left = rect.left + 'px';
+        dialog.style.top = rect.top + 'px';
+        dialog.style.margin = '0';
+        dialog.style.transform = 'none';
+        dialog.style.width = rect.width + 'px';
+        dialog.style.transition = 'none';
+
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        isDragging = true;
+        header.style.cursor = 'grabbing';
+    };
+
+    const doDrag = (e) => {
+        if (!isDragging) return;
+
+        e.preventDefault();
+
+        const clientX = e.clientX || e.touches?.[0].clientX;
+        const clientY = e.clientY || e.touches?.[0].clientY;
+
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+
+        const dialog = modal.querySelector('.modal-dialog');
+        const headerHeight = header.offsetHeight || 60;
+
+        let newLeft = initialLeft + dx;
+        let newTop = initialTop + dy;
+
+        // Вертикаль — заголовок всегда виден
+        const minTop = -(dialog.offsetHeight - headerHeight - 30);
+        const maxTop = window.innerHeight - headerHeight + 30;
+        newTop = Math.max(minTop, Math.min(maxTop, newTop));
+
+        // Горизонталь — свободное движение (остаётся видимая полоска 120px)
+        const visibleStrip = 120;
+        const minLeft = -(dialog.offsetWidth - visibleStrip);
+        const maxLeft = window.innerWidth - visibleStrip;
+        newLeft = Math.max(minLeft, Math.min(maxLeft, newLeft));
+		
+        dialog.style.left = newLeft + 'px';
+        dialog.style.top = newTop + 'px';
+    };
+
+    const stopDrag = () => {
+        if (!isDragging) return;
+
+        isDragging = false;
+        header.style.cursor = 'grab';
+        modal.querySelector('.modal-dialog').style.transition = '';
+    };
+
+    // Mouse + Touch
+    header.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('mouseup', stopDrag);
+
+    header.addEventListener('touchstart', startDrag, { passive: false });
+    document.addEventListener('touchmove', doDrag, { passive: false });
+    document.addEventListener('touchend', stopDrag);
+	
+    modal.addEventListener('hidden.bs.modal', () => {
+        const dialog = modal.querySelector('.modal-dialog');
+        dialog.style.position = '';
+        dialog.style.left = '';
+        dialog.style.top = '';
+        dialog.style.width = '';
+        dialog.style.margin = '';
+        dialog.style.transform = '';
+        dialog.style.transition = '';
     });
 });

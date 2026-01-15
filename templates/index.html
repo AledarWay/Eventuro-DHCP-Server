@@ -48,7 +48,7 @@
         }
         .table td, .table th {
             background-color: transparent !important;
-            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
         }
         [data-bs-theme="dark"] .table td, [data-bs-theme="dark"] .table th {
             text-shadow: 0 1px 1px rgba(255, 255, 255, 0.2);
@@ -60,11 +60,27 @@
             background-color: rgba(37, 37, 37, 0.95) !important;
         }
         .modal-content {
+			background-color: rgba(255, 255, 255, 0.95);
+		}
+		[data-bs-theme="light"] .modal-content {
+			color: #212529;
+		}
+		[data-bs-theme="dark"] .modal-content {
+			background-color: rgba(26, 26, 26, 0.95);
+			color: #e0e0e0;
+		}
+		.modal-header {
             background-color: rgba(255, 255, 255, 0.95);
         }
-        [data-bs-theme="dark"] .modal-content {
+        [data-bs-theme="dark"] .modal-header {
             background-color: rgba(26, 26, 26, 0.95);
-            color: #e0e0e0;
+        }
+        .modal-body {
+            background-color: rgba(255, 255, 255, 0.95);
+			border-radius: var(--bs-modal-border-radius);
+        }
+        [data-bs-theme="dark"] .modal-body {
+            background-color: rgba(26, 26, 26, 0.95);
         }
         .alert {
             background-color: rgba(255, 255, 255, 0.95);
@@ -153,27 +169,32 @@
         [data-bs-theme="dark"] .btn-outline-primary:hover {
             color: #99ccff;
         }
-        #logsModal .modal-content,
+        #logsModal .modal-content {
+            background-color: rgba(255, 255, 255, 0.95);
+            color: #212529;
+        }
         [data-bs-theme="dark"] #logsModal .modal-content {
-            background-color: rgba(37, 37, 37, 0.95);
+            background-color: rgba(26, 26, 26, 0.95);
             color: #e0e0e0;
         }
         #logs-content {
-            max-height: 500px;
-            min-height: 200px;
+            max-height: 40vh;
+            min-height: 40vh;
             overflow-y: auto;
-            white-space: pre-wrap;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9rem;
-            display: block !important;
-            visibility: visible !important;
-            background-color: rgba(255, 255, 255, 0.95);
-        }
-        [data-bs-theme="dark"] #logs-content {
-            background-color: rgba(37, 37, 37, 0.95);
-        }
+			white-space: pre-wrap;
+			padding: 10px;
+			border-radius: 4px;
+			font-family: 'Courier New', monospace;
+			font-size: 0.9rem;
+			display: block !important;
+			visibility: visible !important;
+			background-color: rgba(255, 255, 255, 0.95);
+			color: #212529;
+		}
+		[data-bs-theme="dark"] #logs-content {
+			background-color: rgba(26, 26, 26, 0.95);
+			color: #e0e0e0;
+		}
         .toggle-details {
             border: none;
             background: none;
@@ -397,6 +418,17 @@
         .table-wrapper {
             margin-top: 20px;
         }
+		.modal-header {
+			cursor: move !important;
+			user-select: none;
+			touch-action: none;
+		}
+		.modal-header:hover {
+			background-color: rgba(0,0,0,0.03);
+		}
+		[data-bs-theme="dark"] .modal-header:hover {
+			background-color: rgba(255,255,255,0.05);
+		}
         @media (max-width: 767px) {
             body {
                 font-size: 1rem;
@@ -958,7 +990,7 @@
         </div>
     </div>
     <div class="modal fade" id="logsModal" tabindex="-1" aria-labelledby="logsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="logsModalLabel">Логи сервера</h5>
@@ -966,9 +998,6 @@
                 </div>
                 <div class="modal-body">
                     <pre id="logs-content">Загрузка логов...</pre>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
                 </div>
             </div>
         </div>

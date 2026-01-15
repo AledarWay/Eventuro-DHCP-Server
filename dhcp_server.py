@@ -16,16 +16,16 @@ class DHCPServer:
         self.stop_event = threading.Event()
         self.thread = None
         self.lease_check_thread = None
-        self.metrics_thread = None  # Поток для отправки метрик
+        self.metrics_thread = None                                  # Поток для отправки метрик
         self.pool_start_int = self.ip_to_int(config['pool_start'])
         self.pool_end_int = self.ip_to_int(config['pool_end'])
         self.interface = config.get('interface', None)
-        self.discover_cache = {}  # Кэш для DHCPDISCOVER: { (xid, mac): { 'packet': bytes, 'expire_at': datetime } }
-        self.request_cache = {}  # Кэш для DHCPREQUEST: { (xid, mac, requested_ip): { 'packet': bytes, 'expire_at': datetime } }
-        self.inform_cache = {}  # Кэш для DHCPINFORM: { (xid, mac, ciaddr): { 'packet': bytes, 'expire_at': datetime } }
-        self.cache_ttl = config.get('cache_ttl', 30)  # TTL кэша в секундах
-        self.metrics = defaultdict(int)  # Счётчик для каждого типа сообщения
-        self.influxdb = InfluxDBService(config)  # Инициализация InfluxDB
+        self.discover_cache = {}                                    # Кэш для DHCPDISCOVER: { (xid, mac): { 'packet': bytes, 'expire_at': datetime } }
+        self.request_cache = {}                                     # Кэш для DHCPREQUEST: { (xid, mac, requested_ip): { 'packet': bytes, 'expire_at': datetime } }
+        self.inform_cache = {}                                      # Кэш для DHCPINFORM: { (xid, mac, ciaddr): { 'packet': bytes, 'expire_at': datetime } }
+        self.cache_ttl = config.get('cache_ttl', 30)                # TTL кэша в секундах
+        self.metrics = defaultdict(int)                             # Счётчик для каждого типа сообщения
+        self.influxdb = InfluxDBService(config)
         logging.info("DHCP-сервер инициализирован с конфигурацией: %s", config)
 
     @staticmethod
@@ -79,7 +79,7 @@ class DHCPServer:
                         WHERE mac = ?
                     """, (mac,))
                     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                    self.db_manager._insert_history(
+                    self.db_manager.insert_history(
                         mac=mac,
                         action='DEVICE_RESTORED',
                         ip=None,

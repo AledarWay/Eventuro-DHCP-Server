@@ -1,13 +1,13 @@
 from flask import Flask, request, render_template, redirect, url_for, jsonify, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from datetime import datetime
 import logging
 import re
 import socket
 import struct
 import math
 import os
-from datetime import datetime
 
 def log_request(endpoint, request_headers, request_body, response_headers, response_body):
     log_message = (
@@ -66,6 +66,10 @@ def create_app(server, db_manager, auth_manager):
     app = Flask(__name__)
     app.config['TEMPLATES_AUTO_RELOAD'] = True
     app.config['SECRET_KEY'] = os.urandom(24)
+
+    # Логи веб-сервера на уровень WARNING
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.WARNING)
 
     # Инициализация кэша (словарь для хранения данных по IP клиента)
     api_cache = {}  # Формат: {client_ip: (response, creation_time)}
@@ -554,7 +558,7 @@ def create_app(server, db_manager, auth_manager):
         with db_manager.get_history_connection() as conn:
             cursor = conn.cursor()
             current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            db_manager._insert_history(
+            db_manager.insert_history(
                 mac=mac,
                 action='HOSTNAME_UPDATED',
                 ip=current_ip,
@@ -738,7 +742,7 @@ def create_app(server, db_manager, auth_manager):
                 if old_ip:
                     cursor.execute("UPDATE leases SET is_expired = 1, updated_at = ?, expire_at = ?, ip = null WHERE mac = ? AND deleted_at IS NULL",
                                 (current_time, current_time, mac))
-                    db_manager._insert_history(mac, 'LEASE_RESET', old_ip, None, hostname or 'не указано', None,
+                    db_manager.insert_history(mac, 'LEASE_RESET', old_ip, None, hostname or 'не указано', None,
                                             f"Аренда сброшена, IP {old_ip} освобождён",
                                             current_time, change_channel='WEB')
                     db_manager.update_lease_type(mac, 'DYNAMIC', change_channel='WEB')
@@ -980,7 +984,7 @@ def create_app(server, db_manager, auth_manager):
                 cursor = conn.cursor()
                 pool_start_int = ip_to_int(server.config['pool_start'])
                 pool_end_int = ip_to_int(server.config['pool_end'])
-                free_ip = db_manager._get_new_dynamic_ip(cursor, pool_start_int, pool_end_int)
+                free_ip = db_manager.get_new_dynamic_ip(cursor, pool_start_int, pool_end_int)
                 if free_ip:
                     return jsonify({'ip': free_ip}), 200
                 else:
