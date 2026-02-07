@@ -563,8 +563,8 @@ def create_app(server, db_manager, auth_manager):
                 action='HOSTNAME_UPDATED',
                 ip=current_ip,
                 new_ip=None,
-                name=current_hostname or 'не указано',
-                new_name=new_hostname or 'не указано',
+                name=current_hostname,
+                new_name=new_hostname,
                 description=f"Имя хоста сброшено с '{current_hostname or 'не указано'}' на '{new_hostname or 'не указано'}'",
                 timestamp=current_time,
                 change_channel='WEB'
@@ -742,7 +742,7 @@ def create_app(server, db_manager, auth_manager):
                 if old_ip:
                     cursor.execute("UPDATE leases SET is_expired = 1, updated_at = ?, expire_at = ?, ip = null WHERE mac = ? AND deleted_at IS NULL",
                                 (current_time, current_time, mac))
-                    db_manager.insert_history(mac, 'LEASE_RESET', old_ip, None, hostname or 'не указано', None,
+                    db_manager.insert_history(mac, 'LEASE_RESET', old_ip, None, hostname, None,
                                             f"Аренда сброшена, IP {old_ip} освобождён",
                                             current_time, change_channel='WEB')
                     db_manager.update_lease_type(mac, 'DYNAMIC', change_channel='WEB')
