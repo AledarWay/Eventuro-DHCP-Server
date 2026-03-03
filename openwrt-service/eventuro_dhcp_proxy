@@ -1,10 +1,10 @@
 #!/bin/sh /etc/rc.common
-# Service script to start Eventuro-DHCP-Server on OpenWrt
+# Service script to start Eventuro-DHCP-Server API proxy on OpenWrt
 USE_PROCD=1
 START=95
 STOP=01
 # Path to the main Python script
-PROG="/usr/custom/Eventuro-DHCP-Server/main.py"
+PROG="/usr/custom/Eventuro-DHCP-Server/dhcp_api_proxy.py"
 # Path to Python interpreter
 PYTHON="/usr/bin/python3"
 # Working directory
@@ -20,13 +20,13 @@ start_service() {
         logger -t eventuro_dhcp "Script $PROG not found"
         exit 1
     }
-    logger -t eventuro_dhcp "Starting Eventuro DHCP server..."
+    logger -t eventuro_dhcp "Starting Eventuro proxy DHCP server..."
     # procd configuration
     procd_open_instance
     procd_set_param command "$PYTHON" "$PROG"
     procd_set_param file "$PROG"
     procd_set_param respawn          # Restart on failure
-    procd_set_param pidfile /var/run/eventuro_dhcp.pid
+    procd_set_param pidfile /var/run/eventuro_dhcp_proxy.pid
     procd_set_param env PYTHONPATH="$WORKING_DIR"
     procd_set_param nice -5          # Process priority
     procd_append_param workdir "$WORKING_DIR"
@@ -34,15 +34,15 @@ start_service() {
 }
 
 stop_service() {
-    logger -t eventuro_dhcp "Stopping Eventuro DHCP server..."
+    logger -t eventuro_dhcp "Stopping Eventuro proxy DHCP server..."
 }
 
 service_running() {
-    logger -t eventuro_dhcp "Checking status of Eventuro DHCP server..."
+    logger -t eventuro_dhcp "Checking status of Eventuro proxy DHCP server..."
 }
 
 reload_service() {
-    logger -t eventuro_dhcp "Restarting Eventuro DHCP server..."
+    logger -t eventuro_dhcp "Restarting Eventuro proxy DHCP server..."
     stop
     start
 }
