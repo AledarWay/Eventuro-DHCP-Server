@@ -177,7 +177,7 @@
 
 #### Секция `influxdb`
 - **metrics_enabled**: Включить запись метрик в InfluxDB (true/false).
-- **url**: URL сервера InfluxDB (например, "http://192.168.1.1:8087").
+- **url**: URL сервера InfluxDB.
 - **token**: Токен для аутентификации в InfluxDB.
 - **org**: Название организации в InfluxDB.
 - **bucket**: Название бакета для хранения метрик.
