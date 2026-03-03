@@ -24,6 +24,7 @@
 - **Автоматическая миграция подсети**: При изменении конфига подсети сервер мигрирует существующие аренды.
 - **Очистка истории**: Автоматическая очистка старых записей (LEASE_RENEWED и INFORM) старше заданного периода.
 - **Мониторинг метрик в InfluxDB**: Запись метрик о работе сервера (например, количество активных аренд, занятых/свободных IP, статистика запросов) в InfluxDB для последующего анализа и визуализации (например, в Grafana). Поддерживается настраиваемый интервал отправки данных.
+- **Отправка логов в OpenSearch**: Позволяет отправлять структурированные логи сервера в OpenSearch / Elasticsearch.
 
 ## Требования
 
@@ -110,12 +111,18 @@
   },
   "influxdb": {
     "metrics_enabled": false,
-    "url": "http://192.168.1.1:8087",
-    "token": "influxdb-token-here",
-    "org": "OrgName",
-    "bucket": "BucketName",
-    "measurement": "metrics_name",
+    "influx_url": "http://192.168.1.1:8087",
+    "influx_token": "TYPE_TOKEN_HERE",
+    "influx_org": "OrgName",
+    "influx_bucket": "Eventuro",
+    "influx_measurement": "dhcp_metrics",
     "metrics_interval": 5
+  },
+  "opensearch": {
+	"os_send_enabled": false,
+	"os_urls": "http://192.168.1.1:9200",
+	"os_index": "eventuro-dhcp-logs",
+	"os_flush_interval": 5
   }
 }
 ```
@@ -177,6 +184,14 @@
 - **measurement**: Имя измерения (measurement) для метрик в InfluxDB.
 - **metrics_interval**: Интервал отправки метрик в InfluxDB (в секундах).
 
+#### Секция `opensearch`
+- **os_send_enabled**: Включить отправку логов в OpenSearch (true/false).
+- **os_urls**: URL-адрес(а) OpenSearch кластера.
+- **os_index**: Имя индекса, в который будут отправляться логи.
+- **os_flush_interval**: Интервал принудительной отправки накопленных логов в секундах.
+  Меньше значение: логи появляются быстрее, но выше нагрузка на OpenSearch.
+  Большее значение: батчинг лучше, но задержка доставки логов увеличивается.
+
 ### Примечания
 - Конфиг валидируется при запуске. Если подсеть изменилась, сервер автоматически мигрирует аренды.
 
@@ -187,3 +202,4 @@
 - API: 
   - `/api/client/<ip>?token=<api_token>`: Информация о клиенте по IP.
   - `/api/clients?token=<api_token>`: Список всех клиентов.
+- `dhcp_api_proxy.py` может быть использован для объединения баз устройств нескольких DHCP-Серверов.
