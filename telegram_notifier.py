@@ -127,7 +127,7 @@ class TelegramNotifier:
         # Экранируем статические части сообщения
         mac_label = self.escape_markdown("MAC")
         ip_label = self.escape_markdown("Выдан IP")
-        
+
         # Формируем сообщение
         if is_new_device and self.notify_new:
             message = (

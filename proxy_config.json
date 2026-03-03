@@ -1,0 +1,19 @@
+{
+  "proxy": {
+    "servers": [
+      {"host": "192.168.1.1", "port": 5500},
+      {"host": "192.168.2.1", "port": 5500}
+    ],
+    "api_token": "6pItIzsU9UYVYRW0OEEjTxg0A6k2JBjBSGgtCEOjqFypkP9g6iDadILVbzS4jLAj",
+    "proxy_port": 5501,
+    "cache_ttl": 30,
+    "duplicate_mac_policy": "keep_all",
+    "dhcp_timeout_seconds": 3
+  },
+  "logging": {
+    "log_file": "dhcp_proxy.log",
+    "log_level": "INFO",
+    "max_log_size_mb": 10,
+    "max_log_backup_count": 10
+  }
+}

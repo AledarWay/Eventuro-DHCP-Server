@@ -49,11 +49,17 @@
   },
   "influxdb": {
     "metrics_enabled": false,
-    "url": "http://192.168.1.1:8087",
-    "token": "influxdb-token-here",
-    "org": "OrgName",
-    "bucket": "BucketName",
-    "measurement": "metrics_name",
+    "influx_url": "http://192.168.1.1:8087",
+    "influx_token": "TOKEN_HERE",
+    "influx_org": "OrgName",
+    "influx_bucket": "Eventuro",
+    "influx_measurement": "dhcp_metrics",
     "metrics_interval": 5
+  },
+  "opensearch": {
+	"os_send_enabled": false,
+	"os_urls": "http://192.168.1.1:9200",
+	"os_index": "eventuro-dhcp-logs",
+	"os_flush_interval": 5
   }
 }

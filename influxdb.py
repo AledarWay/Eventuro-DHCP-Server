@@ -25,13 +25,13 @@ class InfluxDBService:
         logger.info("Инициализация подключения к InfluxDB...")
         try:
             self.client = InfluxDBClient(
-                url=config['url'],
-                token=config['token'],
-                org=config['org']
+                url=config['influx_url'],
+                token=config['influx_token'],
+                org=config['influx_org']
             )
             self.write_api = self.client.write_api(write_options=SYNCHRONOUS)
-            self.bucket = config['bucket']
-            self.measurement = config['measurement']
+            self.bucket = config['influx_bucket']
+            self.measurement = config['influx_measurement']
             logger.info(f"Успешное подключение к InfluxDB. Бакет: {self.bucket}, Measurement: {self.measurement}")
         except Exception as e:
             logger.error(f"Ошибка инициализации InfluxDB: {str(e)}")
