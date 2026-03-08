@@ -13,8 +13,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from flask import Flask, request, jsonify
 
-# ======================== ЛОГИРОВАНИЕ ========================
-
 class CustomRotatingFileHandler(RotatingFileHandler):
     def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None, delay=False):
         super().__init__(filename, mode, maxBytes, backupCount, encoding, delay)
@@ -43,8 +41,6 @@ class CustomFormatter(logging.Formatter):
         dt = datetime.fromtimestamp(record.created)
         return dt.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
 
-# ======================== КОНФИГУРАЦИЯ ========================
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'proxy_config.json')
 
@@ -53,10 +49,10 @@ def load_config():
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             config = json.load(f)
     except FileNotFoundError:
-        print(f"ОШИБКА: proxy_config.json не найден в {BASE_DIR}")
+        print(f"Ошибка загрузки конфига: proxy_config.json не найден в {BASE_DIR}")
         exit(1)
     except json.JSONDecodeError as e:
-        print(f"ОШИБКА: Некорректный JSON: {e}")
+        print(f"Ошибка загрузки конфига: Некорректный JSON: {e}")
         exit(1)
 
     proxy = config.get("proxy", {})
@@ -77,7 +73,7 @@ def load_config():
         "proxy_port": proxy.get("proxy_port", 5501),
         "cache_ttl": proxy.get("cache_ttl", 30),
         "duplicate_mac_policy": proxy.get("duplicate_mac_policy", "keep_all").lower(),
-        "dhcp_timeout_seconds": float(proxy.get("dhcp_timeout_seconds", 3)),  # новое поле
+        "dhcp_timeout_seconds": float(proxy.get("dhcp_timeout_seconds", 3)),
 
         "log_file": os.path.join(BASE_DIR, logging_cfg.get("log_file", "dhcp_proxy.log")),
         "log_level": logging_cfg.get("log_level", "INFO"),
@@ -86,8 +82,6 @@ def load_config():
     }
 
 cfg = load_config()
-
-# ======================== ЛОГИРОВАНИЕ ========================
 
 formatter = CustomFormatter(fmt='%(asctime)s [%(levelname)s] [%(name)s] {%(funcName)s}: %(message)s')
 
@@ -113,8 +107,6 @@ log = logging.getLogger(__name__)
 log.info("DHCP API Proxy запущен (умный роутинг + настраиваемый таймаут)")
 log.info(f"Серверов: {len(cfg['servers'])}, таймаут DHCP: {cfg['dhcp_timeout_seconds']}с, TTL кэша: {cfg['cache_ttl']}с")
 
-# ======================== КЭШ ========================
-
 app = Flask(__name__)
 _cache = {}
 _cache_ts = {}
@@ -123,23 +115,30 @@ _cache_lock = threading.Lock()
 def get_cached(key: str):
     with _cache_lock:
         if key in _cache and (time.time() - _cache_ts.get(key, 0)) < cfg["cache_ttl"]:
-            return _cache[key]
+            return _cache[key]  # (status, data)
         return None
 
-def set_cached(key: str, value):
+def set_cached(key: str, status: int, data):
     with _cache_lock:
-        _cache[key] = value
+        _cache[key] = (status, data)
         _cache_ts[key] = time.time()
 
-# ======================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ========================
-
 def query_server(server: dict, endpoint: str):
-    url = f"http://{server['host']}:{server.get('port', 5500)}{endpoint}"
+    target_host = server.get('api_domain') or server['host']
+    port = server.get('port')
+    if port:
+        url = f"http://{target_host}:{port}{endpoint}"
+    else:
+        url = f"http://{target_host}{endpoint}"
     params = {"token": cfg["api_token"]}
     try:
         r = requests.get(url, params=params, timeout=cfg["dhcp_timeout_seconds"])
         if r.status_code == 200:
-            data = r.json()
+            try:
+                data = r.json()
+            except json.JSONDecodeError as e:
+                log.error(f"Невалидный JSON от {target_host}:{port}{endpoint}: {e}, тело: {r.text[:200]}")
+                return {"success": False, "error": f"Invalid JSON response: {e}"}
             return {
                 "success": True,
                 "data": data,
@@ -201,8 +200,6 @@ def merge_clients(responses):
 
     return clients
 
-# ======================== API ========================
-
 @app.route('/api/client/<ip>', methods=['GET'])
 def api_client(ip: str):
     if request.args.get('token') != cfg["api_token"]:
@@ -211,16 +208,17 @@ def api_client(ip: str):
     cache_key = f"client:{ip}"
     cached = get_cached(cache_key)
     if cached is not None:
-        cached["is_cached"] = True
-        return jsonify(cached)
+        status, data = cached
+        data["is_cached"] = True
+        return jsonify(data), status
 
     server = get_server_for_ip(ip)
     if not server:
         resp = {"error": "No DHCP server responsible for this IP subnet", "ip": ip}
-        set_cached(cache_key, resp)
+        set_cached(cache_key, 400, resp)
         return jsonify(resp), 400
 
-    log.info(f"Запрос клиента {ip} → сервер {server['host']} (таймаут {cfg['dhcp_timeout_seconds']}с)")
+    log.info(f"Запрос клиента {ip} -> сервер {server['host']} (таймаут {cfg['dhcp_timeout_seconds']}с)")
 
     result = query_server(server, f"/api/client/{ip}")
 
@@ -239,7 +237,7 @@ def api_client(ip: str):
         resp["is_cached"] = False
         resp["is_dhcp_cached"] = result["is_dhcp_cached"]
         resp["source_server"] = server['host']
-        set_cached(cache_key, resp)
+        set_cached(cache_key, 200, resp)
         return jsonify(resp), 200
 
     resp = {
@@ -249,9 +247,8 @@ def api_client(ip: str):
         "is_cached": False,
         "is_dhcp_cached": False
     }
-    set_cached(cache_key, resp)
+    set_cached(cache_key, 404, resp)
     return jsonify(resp), 404
-
 
 @app.route('/api/clients', methods=['GET'])
 def api_clients():
@@ -261,8 +258,9 @@ def api_clients():
     cache_key = "all_clients"
     cached = get_cached(cache_key)
     if cached is not None:
-        cached["is_cached"] = True
-        return jsonify(cached)
+        status, data = cached
+        data["is_cached"] = True
+        return jsonify(data), status
 
     errors = {}
     responses = []
@@ -275,7 +273,7 @@ def api_clients():
                 resp = future.result()
                 if not resp["success"]:
                     errors[srv["host"]] = resp["error"]
-                    log.warning(f"Сервер {srv['host']} → ошибка: {resp['error']}")
+                    log.warning(f"Сервер {srv['host']} -> ошибка: {resp['error']}")
                 else:
                     responses.append(resp)
             except Exception as e:
@@ -295,10 +293,9 @@ def api_clients():
         "errors": errors or None
     }
 
-    set_cached(cache_key, result)
+    set_cached(cache_key, 200, result)
     log.info(f"Список клиентов сформирован: {len(clients)} записей, ошибок серверов: {len(errors)}")
     return jsonify(result)
-
 
 @app.route('/health')
 def health():
@@ -325,8 +322,6 @@ def health():
         "cache_ttl": cfg["cache_ttl"],
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
-
-# ======================== ЗАПУСК ========================
 
 if __name__ == '__main__':
     log.info(f"DHCP API Proxy стартует на порту {cfg['proxy_port']}")
