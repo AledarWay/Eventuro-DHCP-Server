@@ -189,8 +189,9 @@ class DHCPServer:
         options += b'\x33\x04' + struct.pack('!I', self.config['lease_time'])
         options += b'\x3a\x04' + struct.pack('!I', self.config['lease_time'] // 2)
         options += b'\x3b\x04' + struct.pack('!I', self.config['lease_time'] * 7 // 8)
-        domain_bytes = self.config['domain_name'].encode('ascii')
-        options += b'\x0f' + struct.pack('B', len(domain_bytes)) + domain_bytes
+        if 'domain_name' in self.config and self.config['domain_name']:
+            domain_bytes = self.config['domain_name'].encode('ascii')
+            options += b'\x0f' + struct.pack('B', len(domain_bytes)) + domain_bytes
         options += b'\xFF'
         logging.debug(f"Сформированы опции для типа {msg_type} (yiaddr={yiaddr}): {binascii.hexlify(options)}")
         return options

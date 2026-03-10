@@ -70,7 +70,7 @@
     "gateway": "192.168.1.1",
     "dns_servers": ["8.8.8.8", "1.1.1.1"],
     "lease_time": 604800,
-    "domain_name": "MyDomain.local"
+    "domain_name": "mydomain.local"
   },
   "server": {
     "cache_ttl": 30,
@@ -137,7 +137,7 @@
 - **gateway**: Шлюз по умолчанию.
 - **dns_servers**: Список DNS-серверов (массив строк).
 - **lease_time**: Время аренды в секундах (по умолчанию 604800 = 7 дней).
-- **domain_name**: Доменное имя сети.
+- **domain_name**: Доменное имя сети (необязательно).
 
 #### Секция `server`
 - **cache_ttl**: TTL кэша для повторных DHCP-запросов (секунды).
