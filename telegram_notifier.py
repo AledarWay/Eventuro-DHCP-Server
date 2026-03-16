@@ -130,25 +130,27 @@ class TelegramNotifier:
 
         # Формируем сообщение
         if is_new_device and self.notify_new:
+            network_line = f"🌐 *Сеть*: {domain_name}\n" if domain_name else ""
             message = (
                 "🛜 Подключено *новое устройство* к сети\n"
                 f"ℹ️ *Имя*: {hostname}\n"
                 f"🔌 *{mac_label}*: {mac}\n"
                 f"✉️ *{ip_label}*: {ip}\n"
-                f"🌐 *Сеть*: {domain_name}\n"
+                f"{network_line}"
                 f"📱 Управление: [Открыть]({web_url})\n"
                 f"🕒 Время: {current_time}"
             )
             self.send_message(message)
         elif not is_new_device and self.notify_inactive and time_diff:
             human_time = self.escape_markdown(self.to_human_time(time_diff))
+            network_line = f"🌐 *Сеть*: {domain_name}\n" if domain_name else ""
             message = (
                 "🛜 Устройство подключилось после *длительной неактивности*\n"
                 f"🗓 Последнее подключение: *{human_time} назад*\n"
                 f"ℹ️ *Имя*: {hostname}\n"
                 f"🔌 *{mac_label}*: {mac}\n"
                 f"✉️ *{ip_label}*: {ip}\n"
-                f"🌐 *Сеть*: {domain_name}\n"
+                f"{network_line}"
                 f"📱 Управление: [Открыть]({web_url})\n"
                 f"🕒 Время: {current_time}"
             )

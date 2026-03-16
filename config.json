@@ -8,7 +8,7 @@
     "gateway": "192.168.1.1",
     "dns_servers": ["8.8.8.8", "1.1.1.1"],
     "lease_time": 604800,
-    "domain_name": ""
+    "domain_name": "nitro.eventuro.local"
   },
   "server": {
     "cache_ttl": 30,
