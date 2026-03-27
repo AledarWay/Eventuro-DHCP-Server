@@ -62,7 +62,7 @@ def flatten_config(config):
     sections = {
         'network': [
             'interface', 'server_ip', 'pool_start', 'pool_end', 'subnet_mask',
-            'gateway', 'dns_servers', 'lease_time', 'domain_name'
+            'gateway', 'dns_servers', 'lease_time', 'domain_name', 'domain_enabled'
         ],
         'server': ['cache_ttl', 'expire_check_period'],
         'web': ['web_host', 'web_port', 'web_lease_history_limit'],

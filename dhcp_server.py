@@ -189,7 +189,7 @@ class DHCPServer:
         options += b'\x33\x04' + struct.pack('!I', self.config['lease_time'])
         options += b'\x3a\x04' + struct.pack('!I', self.config['lease_time'] // 2)
         options += b'\x3b\x04' + struct.pack('!I', self.config['lease_time'] * 7 // 8)
-        if 'domain_name' in self.config and self.config['domain_name']:
+        if ('domain_name' in self.config and self.config['domain_name']) and self.config['domain_enabled']:
             domain_bytes = self.config['domain_name'].encode('ascii')
             options += b'\x0f' + struct.pack('B', len(domain_bytes)) + domain_bytes
         options += b'\xFF'
