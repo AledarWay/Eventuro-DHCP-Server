@@ -13,29 +13,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from flask import Flask, request, jsonify
 
-class CustomRotatingFileHandler(RotatingFileHandler):
-    def __init__(self, filename, mode='a', maxBytes=0, backupCount=0, encoding=None, delay=False):
-        super().__init__(filename, mode, maxBytes, backupCount, encoding, delay)
-        self.baseFilenameWithoutExt = filename.rsplit('.', 1)[0]
-
-    def doRollover(self):
-        if self.stream:
-            self.stream.close()
-            self.stream = None
-        current_time = datetime.now().strftime('%Y%m%d_%H%M%S')
-        if self.backupCount > 0:
-            import glob
-            for i in range(self.backupCount - 1, 0, -1):
-                sfn = f"{self.baseFilenameWithoutExt}_{i}_*.log"
-                dfn = f"{self.baseFilenameWithoutExt}_{i + 1}_{current_time}.log"
-                for old_file in glob.glob(sfn):
-                    if os.path.exists(old_file):
-                        os.rename(old_file, dfn)
-            dfn = f"{self.baseFilenameWithoutExt}_1_{current_time}.log"
-            self.rotate(self.baseFilename, dfn)
-        if not self.delay:
-            self.stream = self._open()
-
 class CustomFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
         dt = datetime.fromtimestamp(record.created)
@@ -85,10 +62,11 @@ cfg = load_config()
 
 formatter = CustomFormatter(fmt='%(asctime)s [%(levelname)s] [%(name)s] {%(funcName)s}: %(message)s')
 
-file_handler = CustomRotatingFileHandler(
-    cfg["log_file"],
-    maxBytes=cfg["max_log_size_mb"] * 1024 * 1024,
-    backupCount=cfg["max_log_backup_count"],
+file_handler = RotatingFileHandler(
+    cfg['log_file'],
+    mode='a',
+    maxBytes=cfg['max_log_size_mb'] * 1024 * 1024,
+    backupCount=cfg['max_log_backup_count'],
     encoding='utf-8'
 )
 file_handler.setFormatter(formatter)
