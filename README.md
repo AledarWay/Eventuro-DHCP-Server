@@ -71,7 +71,7 @@
     "dns_servers": ["8.8.8.8", "1.1.1.1"],
     "lease_time": 604800,
     "domain_name": "mydomain.local",
-	  "domain_enabled": false
+	"domain_enabled": false
   },
   "server": {
     "cache_ttl": 30,
