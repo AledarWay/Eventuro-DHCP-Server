@@ -75,7 +75,9 @@
   },
   "server": {
     "cache_ttl": 30,
-    "expire_check_period": 300
+    "expire_check_period": 300,
+	"secure_trust_check": false,
+    "secure_trust_cache_ttl": 30
   },
   "web": {
     "web_host": "0.0.0.0",
@@ -144,6 +146,8 @@
 #### Секция `server`
 - **cache_ttl**: TTL кэша для повторных DHCP-запросов (секунды).
 - **expire_check_period**: Интервал проверки истекших аренд (секунды).
+- **secure_trust_check**: Включает сверку MAC-адресов по ARP-таблице (только для OpenWrt).
+- **secure_trust_cache_ttl**: TTL кэша ARP-таблицы (секунды).
 
 #### Секция `web`
 - **web_host** / **web_port**: Хост и порт для веб-сервера (по умолчанию 0.0.0.0:5500).

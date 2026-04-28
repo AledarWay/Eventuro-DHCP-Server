@@ -39,7 +39,7 @@ def flatten_config(config):
             'interface', 'server_ip', 'pool_start', 'pool_end', 'subnet_mask',
             'gateway', 'dns_servers', 'lease_time', 'domain_name', 'domain_enabled'
         ],
-        'server': ['cache_ttl', 'expire_check_period'],
+        'server': ['cache_ttl', 'expire_check_period', 'secure_trust_check', 'secure_trust_cache_ttl'],
         'web': ['web_host', 'web_port', 'web_lease_history_limit'],
         'database': ['db_file', 'auth_db_file', 'history_db_file', 'history_cleanup_days'],
         'logging': ['log_file', 'log_level', 'max_log_size_mb', 'max_log_backup_count'],

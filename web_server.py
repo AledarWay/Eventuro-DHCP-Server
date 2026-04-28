@@ -3,13 +3,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime
 import logging
-import re
+import subprocess
 import socket
 import struct
 import math
 import os
+import re
 
-def log_request(endpoint, request_headers, request_body, response_headers, response_body):
+def log_request(endpoint, request_headers, request_body, response_headers, response_body, response_status):
     log_message = (
         f"<< Получен запрос по {endpoint}\n"
         f"<< Address: {request.url}\n"
@@ -19,6 +20,7 @@ def log_request(endpoint, request_headers, request_body, response_headers, respo
     logging.info(log_message)
     log_message = (
         f">> Отправлен ответ по {endpoint}\n"
+        f">> Status: {response_status}\n"
         f">> Headers: {dict(response_headers)}\n"
         f">> Body: {response_body}"
     )
@@ -72,14 +74,54 @@ def create_app(server, db_manager, auth_manager):
     log.setLevel(logging.WARNING)
 
     # Инициализация кэша (словарь для хранения данных по IP клиента)
-    api_cache = {}  # Формат: {client_ip: (response, creation_time)}
-    cache_ttl = server.config.get('api_cache_ttl', 10)  # Время жизни кэша
+    api_cache = {}  # {client_ip: (response, code, creation_time)}
+    cache_ttl = server.config.get('api_cache_ttl', 30)
+    arp_cache = {}  # {ip: (mac, timestamp)}
+    arp_cache_ttl = server.config.get('arp_cache_ttl', 30)
+    secure_trust_check = server.config.get('secure_trust_check', False)
+
+    # Функция для обновления кэша ARP таблицы
+    def refresh_arp_cache():
+        nonlocal arp_cache
+        try:
+            with open('/proc/net/arp', 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            now = datetime.now()
+            new_cache = {}
+
+            dhcp_base = server.config['server_ip']
+            dhcp_mask = server.config['subnet_mask']
+
+            for line in lines[1:]:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                ip = parts[0]
+                mac = parts[3].lower()
+
+                if not is_in_subnet(ip, dhcp_base, dhcp_mask):
+                    continue
+
+                # if mac == '00:00:00:00:00:00':
+                #     continue
+
+                new_cache[ip] = (mac, now)
+
+            arp_cache = new_cache
+            logging.debug(f"Кэш ARP таблицы обновлён: {len(arp_cache)} записей")
+
+        except Exception as e:
+            logging.error(f"Не удалось обновить ARP кэш: {e}", exc_info=True)
 
     # Функция для очистки устаревших записей в кэше
     def clean_cache():
         current_time = datetime.now()
         expired_keys = [
-            key for key, (_, creation_time) in api_cache.items()
+            key for key, (_, _, creation_time) in api_cache.items()
             if (current_time - creation_time).total_seconds() > cache_ttl
         ]
         for key in expired_keys:
@@ -802,6 +844,58 @@ def create_app(server, db_manager, auth_manager):
         except Exception as e:
             logging.error(f"Unexpected error reading logs from {log_file_path}: {e}")
             return jsonify({'error': 'Произошла непредвиденная ошибка при чтении логов.'}), 500
+    
+    @app.route('/api/arp', methods=['GET'])
+    def get_arp_table():
+        token = request.args.get('token')
+        client_ip = request.remote_addr
+
+        if 'api_token' not in server.config or token != server.config['api_token']:
+            response = {'error': 'Unauthorized'}
+            code = 401
+            log_request(
+                endpoint="/api/arp",
+                request_headers=request.headers,
+                request_body=request.get_data(as_text=True) or "No body",
+                response_headers={'Content-Type': 'application/json'},
+                response_body=response,
+                response_status=code
+            )
+            return jsonify(response), code
+
+        # Принудительно обновляем ARP-кэш перед выдачей данных
+        refresh_arp_cache()
+
+        # Формируем удобный для API ответ
+        arp_table = []
+        for ip, (mac, timestamp) in arp_cache.items():
+            arp_table.append({
+                'ip': ip,
+                'mac': mac,
+                'timestamp': timestamp.isoformat() if timestamp else None,
+                'age_seconds': int((datetime.now() - timestamp).total_seconds()) if timestamp else None
+            })
+
+        # Сортируем по IP для удобства
+        arp_table.sort(key=lambda x: ip_to_int(x['ip']) if x['ip'] else 0)
+
+        response = {
+            'arp_table': arp_table,
+            'total': len(arp_table),
+            'timestamp': datetime.now().isoformat()
+        }
+        code = 200
+
+        log_request(
+            endpoint="/api/arp",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=response,
+            response_status=code
+        )
+
+        return jsonify(response), code
 
     @app.route('/api/client/<ip>', methods=['GET'])
     def get_client_info(ip):
@@ -810,14 +904,16 @@ def create_app(server, db_manager, auth_manager):
 
         if 'api_token' not in server.config or token != server.config['api_token']:
             response = {'error': 'Unauthorized'}
+            code = 401
             log_request(
                 endpoint=f"/api/client/{ip}",
                 request_headers=request.headers,
                 request_body=request.get_data(as_text=True) or "No body",
                 response_headers={'Content-Type': 'application/json'},
-                response_body=response
+                response_body=response,
+                response_status=code
             )
-            return jsonify(response), 401
+            return jsonify(response), code
 
         # Проверка, является ли запрошенный IP адресом роутера
         router_ip = server.config.get('server_ip')  # Берем IP роутера из конфига
@@ -838,62 +934,160 @@ def create_app(server, db_manager, auth_manager):
                 'trust_flag': 1,  # Роутер всегда доверенный
                 'is_cached': False
             }
+            code = 200
             # Логируем запрос и ответ
             log_request(
                 endpoint=f"/api/client/{ip}",
                 request_headers=request.headers,
                 request_body=request.get_data(as_text=True) or "No body",
                 response_headers={'Content-Type': 'application/json'},
-                response_body=response
+                response_body=response,
+                response_status=code
             )
-            return jsonify(response), 200
+            return jsonify(response), code
 
         # Очищаем устаревшие записи в кэше
         clean_cache()
 
-        # Используем запрошенный IP как ключ кэша
-        cache_key = ip
+        # Используем запрошенный IP + MAC (если есть) как ключ кэша
+        mac = request.args.get('mac')
+        if mac:
+            mac = mac.lower().strip()
+            cache_key = f"{ip}:{mac}"
+        else:
+            cache_key = ip
+
         is_cached = False
         if cache_key in api_cache:
-            response, creation_time = api_cache[cache_key]
+            cached_response, code, creation_time = api_cache[cache_key]
             if (datetime.now() - creation_time).total_seconds() <= cache_ttl:
                 is_cached = True
+                response = dict(cached_response)
                 response['is_cached'] = True
                 log_request(
                     endpoint=f"/api/client/{ip}",
                     request_headers=request.headers,
                     request_body=request.get_data(as_text=True) or "No body",
                     response_headers={'Content-Type': 'application/json'},
-                    response_body=response
+                    response_body=response,
+                    response_status=code
                 )
-                return jsonify(response)
+                return jsonify(response), code
 
         # Если нет в кэше или запись устарела, выполняем запрос к базе
         data = db_manager.get_client_by_ip(ip)
-        if data:
-            response = {
-                'mac': data['mac'],
-                'ip': data['ip'],
-                'hostname': data['hostname'],
-                'client_id': data['client_id'],
-                'created_at': format_date(data['created_at']),
-                'updated_at': format_date(data['updated_at']),
-                'expire_at': format_date(data['expire_at']),
-                'time_to_expiry': time_to_expiry(data['expire_at']),
-                'is_expired': data['is_expired'],
-                'lease_type': data['lease_type'],
-                'is_blocked': data['is_blocked'],
-                'is_custom_hostname': data['is_custom_hostname'],
-                'trust_flag': data['trust_flag'],
-                'is_cached': False
-            }
-            status_code = 200
-        else:
-            response = {'error': 'Client not found', 'is_cached': False}
-            status_code = 404
+
+        if not data:
+            if ip in arp_cache:
+                arp_mac, _ = arp_cache[ip]
+                response = {'error': 'Client not found', 'mac': arp_mac, 'is_cached': False}
+            else:
+                response = {'error': 'Client not found', 'is_cached': False}
+            code = 404
+            api_cache[cache_key] = (response, code, datetime.now())
+            log_request(
+                endpoint=f"/api/client/{ip}",
+                request_headers=request.headers,
+                request_body=request.get_data(as_text=True) or "No body",
+                response_headers={'Content-Type': 'application/json'},
+                response_body=response,
+                response_status=code
+            )
+            return jsonify(response), code
+        
+        if secure_trust_check:
+            now = datetime.now()
+
+            # Принудительное обновление кэша, если IP отсутствует или MAC некорректный
+            need_refresh = (
+                ip not in arp_cache or
+                (now - arp_cache[ip][1]).total_seconds() > arp_cache_ttl or
+                arp_cache[ip][0] == '00:00:00:00:00:00'
+            )
+            if need_refresh:
+                refresh_arp_cache()
+
+            # Проверяем результат после обновления
+            if ip not in arp_cache:
+                # Не смогли получить ARP-таблицу
+                error_response = {
+                    'error': 'Cannot get ARP table entry',
+                    'ip': ip,
+                    'is_cached': False
+                }
+                code = 500
+                api_cache[cache_key] = (error_response, code, datetime.now())
+                log_request(
+                    endpoint=f"/api/client/{ip}",
+                    request_headers=request.headers,
+                    request_body=request.get_data(as_text=True) or "No body",
+                    response_headers={'Content-Type': 'application/json'},
+                    response_body=error_response,
+                    response_status=code
+                )
+                return jsonify(error_response), code
+
+            arp_mac, _ = arp_cache[ip]
+            if arp_mac == '00:00:00:00:00:00':
+                # Некорректный MAC
+                error_response = {
+                    'error': 'Invalid ARP table entry',
+                    'mac': arp_mac,
+                    'ip': ip,
+                    'is_cached': False
+                }
+                code = 500
+                api_cache[cache_key] = (error_response, code, datetime.now())
+                log_request(
+                    endpoint=f"/api/client/{ip}",
+                    request_headers=request.headers,
+                    request_body=request.get_data(as_text=True) or "No body",
+                    response_headers={'Content-Type': 'application/json'},
+                    response_body=error_response,
+                    response_status=code
+                )
+                return jsonify(error_response), code
+
+            if arp_mac != data['mac'].lower():
+                error_response = {
+                    'error': 'MAC does not match with ARP table',
+                    'mac': arp_mac,
+                    'ip': ip,
+                    'is_cached': False
+                }
+                code = 400
+                api_cache[cache_key] = (error_response, code, datetime.now())
+                log_request(
+                    endpoint=f"/api/client/{ip}",
+                    request_headers=request.headers,
+                    request_body=request.get_data(as_text=True) or "No body",
+                    response_headers={'Content-Type': 'application/json'},
+                    response_body=error_response,
+                    response_status=code
+                )
+                return jsonify(error_response), code
+
+        # Успешный ответ
+        response = {
+            'mac': data['mac'],
+            'ip': data['ip'],
+            'hostname': data['hostname'],
+            'client_id': data['client_id'],
+            'created_at': format_date(data['created_at']),
+            'updated_at': format_date(data['updated_at']),
+            'expire_at': format_date(data['expire_at']),
+            'time_to_expiry': time_to_expiry(data['expire_at']),
+            'is_expired': data['is_expired'],
+            'lease_type': data['lease_type'],
+            'is_blocked': data['is_blocked'],
+            'is_custom_hostname': data['is_custom_hostname'],
+            'trust_flag': data['trust_flag'],
+            'is_cached': False
+        }
+        code = 200
 
         # Сохраняем результат в кэш
-        api_cache[cache_key] = (response, datetime.now())
+        api_cache[cache_key] = (response, code, datetime.now())
 
         # Логируем запрос и ответ
         log_request(
@@ -901,10 +1095,11 @@ def create_app(server, db_manager, auth_manager):
             request_headers=request.headers,
             request_body=request.get_data(as_text=True) or "No body",
             response_headers={'Content-Type': 'application/json'},
-            response_body=response
+            response_body=response,
+            response_status=code
         )
 
-        return jsonify(response), status_code
+        return jsonify(response), code
 
     @app.route('/api/clients', methods=['GET'])
     def get_all_clients():
@@ -913,14 +1108,16 @@ def create_app(server, db_manager, auth_manager):
 
         if 'api_token' not in server.config or token != server.config['api_token']:
             response = {'error': 'Unauthorized'}
+            code = 401
             log_request(
                 endpoint="/api/clients",
                 request_headers=request.headers,
                 request_body=request.get_data(as_text=True) or "No body",
                 response_headers={'Content-Type': 'application/json'},
-                response_body=response
+                response_body=response,
+                response_status=code
             )
-            return jsonify(response), 401
+            return jsonify(response), code
 
         # Очищаем устаревшие записи в кэше
         clean_cache()
@@ -929,7 +1126,7 @@ def create_app(server, db_manager, auth_manager):
         cache_key = "all_clients"
         is_cached = False
         if cache_key in api_cache:
-            response, creation_time = api_cache[cache_key]
+            response, code, creation_time = api_cache[cache_key]
             if (datetime.now() - creation_time).total_seconds() <= cache_ttl:
                 is_cached = True
                 response['is_cached'] = True
@@ -938,9 +1135,10 @@ def create_app(server, db_manager, auth_manager):
                     request_headers=request.headers,
                     request_body=request.get_data(as_text=True) or "No body",
                     response_headers={'Content-Type': 'application/json'},
-                    response_body=response
+                    response_body=response,
+                    response_status=code
                 )
-                return jsonify(response)
+                return jsonify(response), code
 
         # Если нет в кэше или запись устарела, выполняем запрос к базе
         columns, rows = db_manager.get_all_leases()
@@ -961,9 +1159,10 @@ def create_app(server, db_manager, auth_manager):
             clients.append(client_data)
 
         response = {'clients': clients, 'total': len(clients), 'is_cached': False}
+        code = 200
 
         # Сохраняем результат в кэш
-        api_cache[cache_key] = (response, datetime.now())
+        api_cache[cache_key] = (response, code, datetime.now())
 
         # Логируем запрос и ответ
         log_request(
@@ -971,10 +1170,11 @@ def create_app(server, db_manager, auth_manager):
             request_headers=request.headers,
             request_body=request.get_data(as_text=True) or "No body",
             response_headers={'Content-Type': 'application/json'},
-            response_body=response
+            response_body=response,
+            response_status=code
         )
 
-        return jsonify(response)
+        return jsonify(response), code
     
     @app.route('/api/get_free_ip', methods=['GET'])
     @login_required

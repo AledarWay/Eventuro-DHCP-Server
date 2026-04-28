@@ -90,6 +90,37 @@ _cache = {}
 _cache_ts = {}
 _cache_lock = threading.Lock()
 
+def log_request(endpoint, request_headers, request_body, response_headers, response_body, response_status):
+    log_message = (
+        f"<< Получен запрос по {endpoint}\n"
+        f"<< Address: {request.url}\n"
+        f"<< Headers: {dict(request_headers)}\n"
+        f"<< Body: {request_body}"
+    )
+    logging.info(log_message)
+
+    log_message = (
+        f">> Отправлен ответ по {endpoint}\n"
+        f">> Status: {response_status}\n"
+        f">> Headers: {dict(response_headers)}\n"
+        f">> Body: {response_body}"
+    )
+    logging.info(log_message)
+
+def log_dhcp_request(url: str, direction: str, status: int = None, body: dict = None):
+    if direction == "request":
+        log_message = (
+            f"<< Отправлен запрос к DHCP по {url}"
+        )
+        logging.info(log_message)
+    else:  # response
+        log_message = (
+            f">> Получен ответ от DHCP по {url}\n"
+            f">> Status: {status}\n"
+            f">> Body: {body}"
+        )
+        logging.info(log_message)
+
 def get_cached(key: str):
     with _cache_lock:
         if key in _cache and (time.time() - _cache_ts.get(key, 0)) < cfg["cache_ttl"]:
@@ -101,34 +132,43 @@ def set_cached(key: str, status: int, data):
         _cache[key] = (status, data)
         _cache_ts[key] = time.time()
 
-def query_server(server: dict, endpoint: str):
+def query_server(server: dict, endpoint: str, extra_params: dict = None):
     target_host = server.get('api_domain') or server['host']
     port = server.get('port')
     if port:
         url = f"http://{target_host}:{port}{endpoint}"
     else:
         url = f"http://{target_host}{endpoint}"
+
     params = {"token": cfg["api_token"]}
+    if extra_params:
+        params.update(extra_params)
+
+    log_dhcp_request(url, "request")
+
     try:
         r = requests.get(url, params=params, timeout=cfg["dhcp_timeout_seconds"])
-        if r.status_code == 200:
-            try:
-                data = r.json()
-            except json.JSONDecodeError as e:
-                log.error(f"Невалидный JSON от {target_host}:{port}{endpoint}: {e}, тело: {r.text[:200]}")
-                return {"success": False, "error": f"Invalid JSON response: {e}"}
-            return {
-                "success": True,
-                "data": data,
-                "is_dhcp_cached": bool(data.get("is_cached", False))
-            }
-        elif r.status_code == 404:
-            return {"success": True, "data": None, "is_dhcp_cached": False}
-        else:
-            return {"success": False, "error": f"HTTP {r.status_code}"}
+
+        try:
+            data = r.json() if r.text.strip() else None
+        except json.JSONDecodeError:
+            data = None
+            log.error(f"Невалидный JSON от {target_host}{endpoint}: {r.text[:300]}")
+        
+        log_dhcp_request(url, "response", status=r.status_code, body=data)
+
+        return {
+            "success": True,
+            "status_code": r.status_code,
+            "data": data,
+            "is_dhcp_cached": bool(data.get("is_cached", False)) if isinstance(data, dict) else False
+        }
+    
     except requests.Timeout:
+        log_dhcp_request(url, "response", status=504, body={"error": "timeout"})
         return {"success": False, "error": "timeout"}
     except requests.RequestException as e:
+        log_dhcp_request(url, "response", status=502, body={"error": str(e)})
         return {"success": False, "error": str(e)}
 
 def get_server_for_ip(ip: str):
@@ -181,63 +221,134 @@ def merge_clients(responses):
 @app.route('/api/client/<ip>', methods=['GET'])
 def api_client(ip: str):
     if request.args.get('token') != cfg["api_token"]:
-        return jsonify({"error": "Unauthorized"}), 401
+        response = {"error": "Unauthorized"}
+        log_request(
+            endpoint=f"/api/client/{ip}",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=response,
+            response_status=401
+        )
+        return jsonify(response), 401
 
-    cache_key = f"client:{ip}"
+    mac = request.args.get('mac')
+    if mac:
+        mac = mac.lower().strip()
+        cache_key = f"client:{ip}:{mac}"
+    else:
+        cache_key = f"client:{ip}"
     cached = get_cached(cache_key)
+
     if cached is not None:
         status, data = cached
+        data = data.copy() if isinstance(data, dict) else data
         data["is_cached"] = True
+        log_request(
+            endpoint=f"/api/client/{ip}",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=data,
+            response_status=status
+        )
         return jsonify(data), status
 
     server = get_server_for_ip(ip)
     if not server:
         resp = {"error": "No DHCP server responsible for this IP subnet", "ip": ip}
+        log_request(
+            endpoint=f"/api/client/{ip}",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=resp,
+            response_status=400
+        )
         set_cached(cache_key, 400, resp)
         return jsonify(resp), 400
 
-    log.info(f"Запрос клиента {ip} -> сервер {server['host']} (таймаут {cfg['dhcp_timeout_seconds']}с)")
-
-    result = query_server(server, f"/api/client/{ip}")
+    extra_params = {"mac": mac} if mac else None
+    result = query_server(server, f"/api/client/{ip}", extra_params)
 
     if not result["success"]:
         err = result["error"]
         log.warning(f"DHCP {server['host']} не ответил на /client/{ip}: {err}")
         if err == "timeout":
-            return jsonify({"error": "DHCP server timeout"}), 504
-        return jsonify({"error": "DHCP server unavailable", "details": err}), 502
+            resp = {"error": "DHCP server timeout"}
+            log_request(
+                endpoint=f"/api/client/{ip}",
+                request_headers=request.headers,
+                request_body=request.get_data(as_text=True) or "No body",
+                response_headers={'Content-Type': 'application/json'},
+                response_body=resp,
+                response_status=504
+            )
+            set_cached(cache_key, 504, resp)
+            return jsonify(resp), 504
+        resp = {"error": "DHCP server unavailable", "details": err}
+        log_request(
+            endpoint=f"/api/client/{ip}",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=resp,
+            response_status=502
+        )
+        set_cached(cache_key, 502, resp)
+        return jsonify(resp), 502
 
+    # Прозрачное проксирование от DHCP
+    status_code = result["status_code"]
     data = result["data"]
-    if data and data.get("ip") == ip:
-        resp = data.copy()
-        resp.pop("source_server", None)
-        resp["is_proxy"] = True
-        resp["is_cached"] = False
-        resp["is_dhcp_cached"] = result["is_dhcp_cached"]
-        resp["source_server"] = server['host']
-        set_cached(cache_key, 200, resp)
-        return jsonify(resp), 200
 
-    resp = {
-        "error": "Client not found",
-        "ip": ip,
-        "is_proxy": True,
-        "is_cached": False,
-        "is_dhcp_cached": False
-    }
-    set_cached(cache_key, 404, resp)
-    return jsonify(resp), 404
+    resp = data.copy()
+    resp.pop("source_server", None)
+    resp["is_proxy"] = True
+    resp["is_cached"] = False
+    resp["is_dhcp_cached"] = result["is_dhcp_cached"]
+    resp["source_server"] = server['host']
+    # if mac: resp["requested_mac"] = mac
+
+    log_request(
+        endpoint=f"/api/client/{ip}",
+        request_headers=request.headers,
+        request_body=request.get_data(as_text=True) or "No body",
+        response_headers={'Content-Type': 'application/json'},
+        response_body=resp,
+        response_status=status_code
+    )
+    set_cached(cache_key, status_code, resp)
+    return jsonify(resp), status_code
 
 @app.route('/api/clients', methods=['GET'])
 def api_clients():
     if request.args.get('token') != cfg["api_token"]:
-        return jsonify({"error": "Unauthorized"}), 401
+        response = {"error": "Unauthorized"}
+        log_request(
+            endpoint="/api/clients",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=response,
+            response_status=401
+        )
+        return jsonify(response), 401
 
     cache_key = "all_clients"
     cached = get_cached(cache_key)
     if cached is not None:
         status, data = cached
+        data = data.copy() if isinstance(data, dict) else data
         data["is_cached"] = True
+        log_request(
+            endpoint="/api/clients",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=data,
+            response_status=status
+        )
         return jsonify(data), status
 
     errors = {}
@@ -271,12 +382,126 @@ def api_clients():
         "errors": errors or None
     }
 
+    log_request(
+        endpoint="/api/clients",
+        request_headers=request.headers,
+        request_body=request.get_data(as_text=True) or "No body",
+        response_headers={'Content-Type': 'application/json'},
+        response_body=result,
+        response_status=200
+    )
     set_cached(cache_key, 200, result)
     log.info(f"Список клиентов сформирован: {len(clients)} записей, ошибок серверов: {len(errors)}")
-    return jsonify(result)
+    return jsonify(result), 200
+
+@app.route('/api/arp', methods=['GET'])
+def api_arp():
+    if request.args.get('token') != cfg["api_token"]:
+        response = {"error": "Unauthorized"}
+        log_request(
+            endpoint="/api/arp",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=response,
+            response_status=401
+        )
+        return jsonify(response), 401
+
+    cache_key = "arp_table"
+    cached = get_cached(cache_key)
+    if cached is not None:
+        status, data = cached
+        data = data.copy() if isinstance(data, dict) else data
+        data["is_cached"] = True
+        log_request(
+            endpoint="/api/arp",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=data,
+            response_status=status
+        )
+        return jsonify(data), status
+
+    errors = {}
+    responses = []
+
+    # Запрашиваем ARP-таблицу со всех серверов параллельно
+    with ThreadPoolExecutor(max_workers=len(cfg["servers"])) as executor:
+        future_to_server = {executor.submit(query_server, s, "/api/arp"): s for s in cfg["servers"]}
+        for future in as_completed(future_to_server):
+            srv = future_to_server[future]
+            try:
+                resp = future.result()
+                if not resp["success"]:
+                    errors[srv["host"]] = resp.get("error", "unknown error")
+                    log.warning(f"Ошибка получения ARP с сервера {srv['host']} : {resp.get('error')}")
+                else:
+                    responses.append((srv, resp))
+            except Exception as e:
+                errors[srv["host"]] = str(e)
+                log.error(f"Исключение при запросе ARP с сервера {srv['host']} : {e}")
+
+    # Объединяем ARP-таблицы (оставляем только одну запись на IP)
+    arp_entries = []
+    seen_ips = set()
+
+    for srv, resp in responses:
+        if not resp.get("data") or "arp_table" not in resp["data"]:
+            continue
+        for entry in resp["data"].get("arp_table", []):
+            ip = entry.get("ip")
+            if not ip or ip in seen_ips:
+                continue
+            seen_ips.add(ip)
+            
+            entry = entry.copy()
+            entry["source_server"] = srv["host"]
+            arp_entries.append(entry)
+
+    # Сортируем по IP
+    arp_entries.sort(
+        key=lambda x: tuple(map(int, x["ip"].split("."))) if x.get("ip") else (0, 0, 0, 0)
+    )
+
+    result = {
+        "arp_table": arp_entries,
+        "total": len(arp_entries),
+        "is_proxy": True,
+        "is_cached": False,
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "errors": errors or None,
+        "sources": [srv["host"] for srv, _ in responses]
+    }
+
+    log_request(
+        endpoint="/api/arp",
+        request_headers=request.headers,
+        request_body=request.get_data(as_text=True) or "No body",
+        response_headers={'Content-Type': 'application/json'},
+        response_body=result,
+        response_status=200
+    )
+    set_cached(cache_key, 200, result)
+
+    log.info(f"ARP-таблица сформирована через прокси: {len(arp_entries)} записей (с {len(responses)} серверов)")
+    return jsonify(result), 200
 
 @app.route('/health')
 def health():
+    if request.args.get('token') and request.args.get('token') != cfg["api_token"]:
+        response = {"error": "Unauthorized"}
+        log_request(
+            endpoint="/health",
+            request_headers=request.headers,
+            request_body=request.get_data(as_text=True) or "No body",
+            response_headers={'Content-Type': 'application/json'},
+            response_body=response,
+            response_status=401
+        )
+        return jsonify(response), 401
+    
     alive = 0
     details = {}
     with ThreadPoolExecutor(max_workers=len(cfg["servers"])) as executor:
@@ -290,7 +515,8 @@ def health():
                 if res["success"]: alive += 1
             except:
                 details[srv["host"]] = "timeout"
-    return jsonify({
+
+    result = {
         "status": "ok" if alive > 0 else "degraded",
         "proxy_port": cfg["proxy_port"],
         "servers_total": len(cfg["servers"]),
@@ -299,7 +525,17 @@ def health():
         "dhcp_timeout": cfg["dhcp_timeout_seconds"],
         "cache_ttl": cfg["cache_ttl"],
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    })
+    }
+
+    log_request(
+        endpoint="/health",
+        request_headers=request.headers,
+        request_body=request.get_data(as_text=True) or "No body",
+        response_headers={'Content-Type': 'application/json'},
+        response_body=result,
+        response_status=200
+    )
+    return jsonify(result), 200
 
 if __name__ == '__main__':
     log.info(f"DHCP API Proxy стартует на порту {cfg['proxy_port']}")

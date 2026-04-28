@@ -13,7 +13,9 @@
   },
   "server": {
     "cache_ttl": 30,
-    "expire_check_period": 300
+    "expire_check_period": 300,
+	"secure_trust_check": false,
+    "secure_trust_cache_ttl": 30
   },
   "web": {
     "web_host": "0.0.0.0",
