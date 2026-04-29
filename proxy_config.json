@@ -15,5 +15,11 @@
     "log_level": "INFO",
     "max_log_size_mb": 10,
     "max_log_backup_count": 10
+  },
+  "opensearch": {
+    "os_send_enabled": false,
+    "os_urls": "http://127.0.0.1:9200",
+    "os_index": "eventuro-dhcp-proxy-logs",
+    "os_flush_interval": 5
   }
 }

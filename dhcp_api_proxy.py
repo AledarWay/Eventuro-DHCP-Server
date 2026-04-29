@@ -18,6 +18,23 @@ class CustomFormatter(logging.Formatter):
         dt = datetime.fromtimestamp(record.created)
         return dt.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
 
+class StructuredJSONFormatter(logging.Formatter):
+    def format(self, record):
+        dt = datetime.fromtimestamp(record.created)
+        timestamp = dt.strftime('%Y-%m-%d %H:%M:%S') + f'.{int(dt.microsecond / 1000):03d}'
+        log_data = {
+            "timestamp": timestamp,
+            "level": record.levelname,
+            "logger": record.name,
+            "function": record.funcName,
+            "message": record.getMessage(),
+            "line": record.lineno,
+            "thread": record.threadName
+        }
+        if record.exc_info:
+            log_data["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_data, ensure_ascii=False)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'proxy_config.json')
 
@@ -44,6 +61,8 @@ def load_config():
         except:
             srv["network"] = None
 
+    opensearch = config.get("opensearch", {})
+    
     return {
         "servers": servers,
         "api_token": proxy.get("api_token", "your_token_here"),
@@ -51,11 +70,14 @@ def load_config():
         "cache_ttl": proxy.get("cache_ttl", 30),
         "duplicate_mac_policy": proxy.get("duplicate_mac_policy", "keep_all").lower(),
         "dhcp_timeout_seconds": float(proxy.get("dhcp_timeout_seconds", 3)),
-
         "log_file": os.path.join(BASE_DIR, logging_cfg.get("log_file", "dhcp_proxy.log")),
         "log_level": logging_cfg.get("log_level", "INFO"),
         "max_log_size_mb": logging_cfg.get("max_log_size_mb", 10),
         "max_log_backup_count": logging_cfg.get("max_log_backup_count", 10),
+        "os_send_enabled": opensearch.get("os_send_enabled", False),
+        "os_urls": opensearch.get("os_urls", "http://127.0.0.1:9200"),
+        "os_index": opensearch.get("os_index", "eventuro-dhcp-proxy-logs"),
+        "os_flush_interval": opensearch.get("os_flush_interval", 5),
     }
 
 cfg = load_config()
@@ -79,16 +101,42 @@ logger.setLevel(cfg["log_level"])
 logger.handlers.clear()
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
-
 log = logging.getLogger(__name__)
 
-log.info("DHCP API Proxy запущен (умный роутинг + настраиваемый таймаут)")
+# OpenSearch логгер
+if cfg.get("os_send_enabled", False):
+    try:
+        from opensearch_logger import OpenSearchHandler
+        
+        es_handler = OpenSearchHandler(
+            hosts=cfg["os_urls"],
+            http_compress=True,
+            use_ssl=False,
+            index_name=cfg["os_index"],
+            index_rotate=None,
+            flush_frequency_in_sec=cfg["os_flush_interval"]
+        )
+        es_handler.setFormatter(StructuredJSONFormatter())
+        es_handler.setLevel(cfg["log_level"])
+        logger.addHandler(es_handler)
+        logging.getLogger("opensearch").setLevel(logging.WARNING)
+        log.info(f"OpenSearch логирование запущено в индекс {cfg['os_index']}")
+    except ImportError:
+        log.warning("Логирование в OpenSearch отключено: Модуль opensearch_logger не найден")
+    except Exception as e:
+        log.error(f"Ошибка инициализации OpenSearchHandler: {e}")
+
+log.info("DHCP API Proxy запущен")
 log.info(f"Серверов: {len(cfg['servers'])}, таймаут DHCP: {cfg['dhcp_timeout_seconds']}с, TTL кэша: {cfg['cache_ttl']}с")
 
 app = Flask(__name__)
 _cache = {}
 _cache_ts = {}
 _cache_lock = threading.Lock()
+
+# Логи веб-сервера на уровень WARNING
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.WARNING)
 
 def log_request(endpoint, request_headers, request_body, response_headers, response_body, response_status):
     log_message = (

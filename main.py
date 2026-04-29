@@ -8,7 +8,6 @@ from dhcp_server import DHCPServer
 from db_manager import DBManager, AuthManager
 from telegram_notifier import TelegramNotifier
 from web_server import create_app, validate_config
-from opensearch_logger import OpenSearchHandler
 
 class CustomFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
@@ -111,20 +110,28 @@ def main():
     logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
 
-    # OpenSearch handler
+    # OpenSearch логгер
     if config['os_send_enabled']:
-        es_handler = OpenSearchHandler(
-            hosts=config['os_urls'],
-            http_compress=True,
-            use_ssl=False,
-            index_name=config['os_index'],
-            index_rotate=None,
-            flush_frequency_in_sec=config['os_flush_interval']
-        )
-        es_handler.setFormatter(StructuredJSONFormatter())
-        es_handler.setLevel(config['log_level'])
-        logger.addHandler(es_handler)
-        logging.getLogger("opensearch").setLevel(logging.WARNING)
+        try:
+            from opensearch_logger import OpenSearchHandler
+
+            es_handler = OpenSearchHandler(
+                hosts=config['os_urls'],
+                http_compress=True,
+                use_ssl=False,
+                index_name=config['os_index'],
+                index_rotate=None,
+                flush_frequency_in_sec=config['os_flush_interval']
+            )
+            es_handler.setFormatter(StructuredJSONFormatter())
+            es_handler.setLevel(config['log_level'])
+            logger.addHandler(es_handler)
+            logging.getLogger("opensearch").setLevel(logging.WARNING)
+            logging.info(f"OpenSearch логирование запущено в индекс {config['os_index']}")
+        except ImportError:
+            logging.warning("Логирование в OpenSearch отключено: Модуль opensearch_logger не найден")
+        except Exception as e:
+            logging.error(f"Ошибка инициализации OpenSearchHandler: {e}")
 
     logging.info("Запуск DHCP сервера...")
     
