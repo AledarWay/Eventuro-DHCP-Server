@@ -3,7 +3,7 @@ import struct
 import binascii
 import logging
 import threading
-import netifaces
+import ifaddr
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -238,15 +238,18 @@ class DHCPServer:
 
         if self.interface:
             try:
-                if self.interface in netifaces.interfaces():
+                # Получаем список интерфейсов
+                adapters = ifaddr.get_adapters()
+                interfaces = [adapter.nice_name for adapter in adapters]
+                if self.interface in interfaces:
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, self.interface.encode() + b'\x00')
                     logging.info(f"DHCP-сервер успешно привязан к интерфейсу {self.interface}")
                 else:
-                    logging.warning(f"Интерфейс {self.interface} не найден. Доступные интерфейсы: {netifaces.interfaces()}. Продолжаем работу без привязки к интерфейсу.")
+                    logging.warning(f"Интерфейс {self.interface} не найден, продолжаем работу без привязки к интерфейсу. Доступные интерфейсы: {interfaces}")
             except Exception as e:
-                logging.warning(f"Ошибка при привязке к интерфейсу {self.interface}: {e}. Продолжаем работу без привязки к интерфейсу.")
+                logging.warning(f"Ошибка привязки к интерфейсу {self.interface}, продолжаем работу без привязки к интерфейсу: {str(e)}")
         else:
-            logging.info("Интерфейс не указан в конфигурации, работаем без привязки к конкретному интерфейсу.")
+            logging.info("Интерфейс не указан в конфигурации, продолжаем работу без привязки к интерфейсу")
 
         while not self.stop_event.is_set():
             try:
