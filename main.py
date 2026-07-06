@@ -126,7 +126,7 @@ def main():
             es_handler.setFormatter(StructuredJSONFormatter())
             es_handler.setLevel(config['log_level'])
             logger.addHandler(es_handler)
-            logging.getLogger("opensearch").setLevel(logging.WARNING)
+            logging.getLogger("opensearch").setLevel(logging.ERROR)
             logging.info(f"OpenSearch логирование запущено в индекс {config['os_index']}")
         except ImportError:
             logging.warning("Логирование в OpenSearch отключено: Модуль opensearch_logger не найден")
